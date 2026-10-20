@@ -1,0 +1,79 @@
+---
+/**
+ * Jeu d'icônes du studio.
+ *
+ * Un seul sprite inline (aucune requête réseau) ; les composants référencent
+ * `<use href="#i-nom">`. Traits de 1,6 px sur une grille 24 : c'est le poids
+ * visuel des icônes de SuperPhoto, pour que les deux studios se ressemblent.
+ */
+interface Props {
+  size?: number;
+}
+const { size = 15 } = Astro.props;
+const icons: Array<[string, string]> = [
+  ['new', '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 12v6M9 15h6"/>'],
+  ['open', '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'],
+  ['save', '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3"/><path d="M8 21v-7h8v7"/>'],
+  ['export', '<path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>'],
+  ['import', '<path d="M12 15V3"/><path d="M8 11l4 4 4-4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>'],
+  ['media', '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/>'],
+  ['sliders', '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="7" cy="18" r="2"/>'],
+  ['wand', '<path d="M5 19L17 7"/><path d="M14 4l1.5 1.5M19 9l1.5 1.5M16 2l.5 2M21 6l2 .5"/>'],
+  ['transition', '<path d="M3 6h7v12H3z"/><path d="M14 6h7v12h-7z"/><path d="M10 12h4"/>'],
+  ['play', '<path d="M7 4l13 8-13 8z"/>'],
+  ['pause', '<path d="M8 4v16M16 4v16"/>'],
+  ['start', '<path d="M6 5v14"/><path d="M19 5L9 12l10 7z"/>'],
+  ['end', '<path d="M18 5v14"/><path d="M5 5l10 7L5 19z"/>'],
+  ['plus', '<path d="M12 5v14M5 12h14"/>'],
+  ['minus', '<path d="M5 12h14"/>'],
+  ['trash', '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/>'],
+  ['duplicate', '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>'],
+  ['text', '<path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/>'],
+  ['square', '<rect x="4" y="4" width="16" height="16" rx="2"/>'],
+  ['circle', '<circle cx="12" cy="12" r="8"/>'],
+  ['scissors', '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 8l12 12M8 16L20 4"/>'],
+  ['snap', '<path d="M6 4v9a4 4 0 0 0 4 4h1"/><path d="M6 4h4M14 17h4v4h-4z"/>'],
+  ['sound', '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 8a5 5 0 0 1 0 8"/>'],
+  ['mute', '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l4 6M21 9l-4 6"/>'],
+  ['magnet', '<path d="M5 4v8a7 7 0 0 0 14 0V4h-4v8a3 3 0 0 1-6 0V4z"/>'],
+  ['help', '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8v.5"/><circle cx="12" cy="17" r=".6" fill="currentColor"/>'],
+  ['gear', '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 7.5l1.7 1M18.1 15.5l1.7 1M4.2 16.5l1.7-1M18.1 8.5l1.7-1"/>'],
+  ['sun', '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/>'],
+  ['moon', '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>'],
+  ['panel-left', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>'],
+  ['panel-right', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>'],
+  ['close', '<path d="M6 6l12 12M18 6L6 18"/>'],
+  ['chevron', '<path d="M9 6l6 6-6 6"/>'],
+  ['film', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>'],
+  ['music', '<path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/>'],
+  ['image', '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M4 17l5-5 4 4 3-3 4 4"/>'],
+  ['eye', '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>'],
+  ['undo', '<path d="M9 6L4 11l5 5"/><path d="M4 11h9a6 6 0 0 1 0 12h-2"/>'],
+  ['zoom-in', '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/>'],
+  ['zoom-out', '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/>'],
+  ['fit', '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'],
+  ['volume', '<path d="M4 10h3l4-3v10l-4-3H4z"/><path d="M15 9a4 4 0 0 1 0 6"/>'],
+  ['sparkle', '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>'],
+  ['folder', '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'],
+];
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  aria-hidden="true"
+  style={`position:absolute;width:0;height:0;overflow:hidden;pointer-events:none`}
+>
+  {icons.map(([name, body]) => (
+    <symbol
+      id={`i-${name}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      set:html={body}
+    />
+  ))}
+</svg>
+<span hidden data-icon-size={size}></span>

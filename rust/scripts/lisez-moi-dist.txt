@@ -1,0 +1,48 @@
+CUT THE FLOW 2 — binaires
+=========================
+
+Chaque fichier est un exécutable AUTONOME : l'interface Astro est embarquée
+dans le binaire, il n'y a rien à installer à côté.
+
+  cuttheflow-windows-x86_64.exe   Windows 10/11 (64 bits)
+  cuttheflow-linux-x86_64         Linux x86-64 (statique, musl)
+  cuttheflow-linux-aarch64        Linux ARM64 (Raspberry Pi, serveurs ARM)
+  cuttheflow-macos-*              macOS (produits par le workflow GitHub Actions)
+
+Lancement
+---------
+Windows : double-cliquez sur cuttheflow-windows-x86_64.exe
+Linux   : ./cuttheflow-linux-x86_64
+macOS   : ./cuttheflow-macos-arm64   (ou -x86_64)
+
+Le navigateur s'ouvre sur http://127.0.0.1:7317/ (--no-open pour l'éviter).
+
+Prérequis : ffmpeg et ffprobe
+-----------------------------
+Le moteur d'export utilise ffmpeg. Il le cherche dans cet ordre :
+
+  1. variables CTF_FFMPEG et CTF_FFPROBE
+  2. fichiers ffmpeg / ffprobe posés À CÔTÉ de l'exécutable
+  3. PATH du système
+
+Installation :
+  Windows : winget install Gyan.FFmpeg
+  macOS   : brew install ffmpeg
+  Linux   : sudo apt install ffmpeg   (ou dnf/pacman)
+
+Vérification : ./cuttheflow doctor   (affiche ffmpeg, les encodeurs et la police)
+
+Utilisation sans interface
+--------------------------
+  cuttheflow doctor
+  cuttheflow probe mon-film.mp4
+  cuttheflow export projet.json --out montage.mp4 --format mp4 --crf 18
+
+Données
+-------
+Médias importés, exports et cache : dossier indiqué au démarrage
+(%LOCALAPPDATA%\cuttheflow sous Windows, ~/.local/share/cuttheflow sous Linux).
+Aucune donnée ne quitte la machine : le serveur n'écoute que sur 127.0.0.1.
+
+Code source : rust/ (moteur), astro/ (interface). Licence propriétaire, voir
+LICENSE.

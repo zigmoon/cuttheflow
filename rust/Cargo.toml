@@ -1,0 +1,35 @@
+# Espace de travail Rust de CUT THE FLOW (version 2).
+#
+# Objectif : un moteur d'import/export **déterministe**, identique sur Windows,
+# macOS et Linux, et un serveur local qui sert l'interface Astro.
+#
+#   ctf-core    modèle de timeline, sondage ffprobe, graphe de filtres (pur)
+#   ctf-engine  exécution ffmpeg : mixage audio, composition vidéo, export
+#   ctf-app     binaire : CLI (`doctor`, `probe`, `export`, `serve`) + HTTP
+#
+# Le moteur ne dépend d'aucune bibliothèque native : uniquement `serde` pour le
+# JSON. ffmpeg/ffprobe sont des processus externes, choisis dans cet ordre :
+#   1. variables CTF_FFMPEG / CTF_FFPROBE
+#   2. binaires posés à côté de l'exécutable
+#   3. PATH
+#
+# Voir README.md pour la construction multi-plateforme.
+
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "LicenseRef-Proprietary"
+authors = ["Simon Dupont-Gellert (Zigmoon)"]
+repository = "https://github.com/zigmoon/SUPERPRINT"
+
+[profile.release]
+lto = true
+opt-level = 2
+codegen-units = 1
+strip = true
+panic = "abort"

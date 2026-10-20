@@ -1,0 +1,66 @@
+---
+import '../styles/studio.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = 'CUT THE FLOW — Editing studio',
+  description = "CUT THE FLOW: multitrack video editing, effects, transitions and shapes. Local import, MP4/WebM/MP3 export through a deterministic Rust engine. Windows, macOS, Linux.",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="theme-dark" data-theme="dark" data-theme-mode="dark" data-lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#0c0c0f" />
+    <meta name="color-scheme" content="dark light" />
+    <title>{title}</title>
+
+    <!-- Identity: the original v1 files, unchanged. -->
+    <link rel="icon" type="image/svg+xml" href="/img/CUT_THE_FLOW_b.svg" sizes="any" />
+    <link rel="icon" type="image/png" href="/img/icon-192.png" sizes="192x192" />
+    <link rel="shortcut icon" href="/img/CUT_THE_FLOW_b.svg" />
+    <link rel="apple-touch-icon" href="/img/apple-touch-icon.png" sizes="180x180" />
+    <link rel="mask-icon" href="/img/CUT_THE_FLOW_b.svg" color="#000000" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="application-name" content="CUT THE FLOW" />
+    <meta name="apple-mobile-web-app-title" content="CUT THE FLOW" />
+    <meta name="msapplication-TileColor" content="#000000" />
+    <meta name="msapplication-TileImage" content="/img/icon-192.png" />
+    <script is:inline>
+      // Le thème et la langue sont appliqués AVANT le premier rendu : aucun
+      // flash clair, aucun flash français au démarrage. Le studio est sombre et
+      // anglophone par défaut ; les deux réglages sont mémorisés.
+      (() => {
+        const root = document.documentElement;
+        let theme = 'dark';
+        let lang = 'en';
+        try {
+          const storedTheme = localStorage.getItem('ctf2.theme');
+          if (storedTheme === 'light' || storedTheme === 'dark') theme = storedTheme;
+          const storedLang = localStorage.getItem('ctf2.lang');
+          if (storedLang === 'fr' || storedLang === 'en') lang = storedLang;
+        } catch (_) {}
+        const dark = theme === 'dark';
+        root.classList.toggle('theme-dark', dark);
+        root.classList.toggle('theme-light', !dark);
+        root.dataset.theme = theme;
+        root.dataset.themeMode = theme;
+        root.dataset.lang = lang;
+        root.lang = lang;
+        root.style.colorScheme = theme;
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', dark ? '#0c0c0f' : '#f8f8f8');
+      })();
+    </script>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

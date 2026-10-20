@@ -1,0 +1,436 @@
+---
+import StudioLayout from '../layouts/StudioLayout.astro';
+import IconSprite from '../components/IconSprite.astro';
+import BrandMark from '../components/BrandMark.astro';
+---
+
+<StudioLayout>
+  <IconSprite />
+
+  <!-- Startup screen: the logo, nothing else. It fades out as soon as the
+       engine has answered (or after 2.5 s) and never blocks anything. -->
+  <div class="splash" id="splash">
+    <BrandMark class="splash-logo" />
+  </div>
+
+  <div class="app-shell" id="app-shell">
+    <!-- ── Top bar ────────────────────────────────────────────────────────
+         One home per action. File operations live here; clip operations live
+         in the timeline toolbar; appearance lives in Preferences. -->
+    <header class="topbar">
+      <div class="brand" title="CUT THE FLOW">
+        <BrandMark class="brand-logo" />
+        <span class="brand-sep" aria-hidden="true"></span>
+        <span class="brand-word">Studio</span>
+      </div>
+
+      <nav class="topbar-actions" aria-label="Fichier" data-i18n-aria="file.menu">
+        <button class="tb-btn" id="btn-new" data-i18n-title="file.newTitle">
+          <svg viewBox="0 0 24 24"><use href="#i-new"></use></svg><span data-i18n="file.new">New</span>
+        </button>
+        <button class="tb-btn" id="btn-open" data-i18n-title="file.openTitle">
+          <svg viewBox="0 0 24 24"><use href="#i-open"></use></svg><span data-i18n="file.open">Open</span>
+        </button>
+        <button class="tb-btn" id="btn-save" data-i18n-title="file.saveTitle">
+          <svg viewBox="0 0 24 24"><use href="#i-save"></use></svg><span data-i18n="file.save">Save</span>
+        </button>
+      </nav>
+
+      <div class="doc-identity">
+        <label class="sr-only" for="projectName" data-i18n="doc.name">Project name</label>
+        <input id="projectName" class="doc-name" type="text" spellcheck="false" value="Untitled" />
+        <span class="doc-meta" id="docMeta">1920 × 1080 · 30 fps</span>
+      </div>
+
+      <div class="topbar-tools">
+        <button class="tb-icon engine-badge" id="engineBadge">
+          <span class="engine-dot" aria-hidden="true"></span>
+          <span class="engine-label" id="engineLabel">engine</span>
+        </button>
+        <span class="topbar-sep" aria-hidden="true"></span>
+        <button class="tb-icon" id="btn-help" data-i18n-title="act.helpTitle" data-i18n-aria="act.help">
+          <svg viewBox="0 0 24 24"><use href="#i-help"></use></svg>
+        </button>
+        <button class="tb-icon panel-toggle" id="btn-toggle-left" data-i18n-title="act.toggleMedia" data-i18n-aria="act.panelMedia">
+          <svg viewBox="0 0 24 24"><use href="#i-panel-left"></use></svg>
+        </button>
+        <button class="tb-icon panel-toggle" id="btn-toggle-right" data-i18n-title="act.toggleTools" data-i18n-aria="act.panelTools">
+          <svg viewBox="0 0 24 24"><use href="#i-panel-right"></use></svg>
+        </button>
+        <span class="topbar-sep" aria-hidden="true"></span>
+        <button class="tb-btn tb-export" id="btn-export" data-i18n-title="act.exportTitle">
+          <svg viewBox="0 0 24 24"><use href="#i-export"></use></svg><span data-i18n="act.export">Export</span>
+        </button>
+        <button class="tb-icon prefs-toggle" id="btn-preferences" data-i18n-title="act.prefsTitle" data-i18n-aria="act.prefs">
+          <svg viewBox="0 0 24 24"><use href="#i-gear"></use></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ── Workspace ────────────────────────────────────────────────────── -->
+    <main class="workspace" id="workspace">
+      <aside class="sidebar media-sidebar" id="media-sidebar" aria-label="Media" data-i18n-aria="media.title">
+        <div class="sidebar-head">
+          <div>
+            <span class="eyebrow" data-i18n="media.eyebrow">Project</span>
+            <h2 data-i18n="media.title">Media</h2>
+          </div>
+          <button class="icon-btn accent" id="btn-import-side" data-i18n-title="media.add" data-i18n-aria="act.import">
+            <svg viewBox="0 0 24 24"><use href="#i-plus"></use></svg>
+          </button>
+        </div>
+
+        <div class="sidebar-scroll">
+          <button class="drop-zone" id="dropZone" type="button" data-i18n-title="media.dropTitle">
+            <svg viewBox="0 0 24 24" class="drop-icon"><use href="#i-import"></use></svg>
+            <strong data-i18n="media.drop">Drop your media</strong>
+            <small data-i18n="media.formats">MP4 · MOV · WebM · MP3 · WAV · PNG</small>
+          </button>
+          <div class="media-list" id="mediaList" role="list"></div>
+        </div>
+
+        <div class="sidebar-foot">
+          <span class="foot-label" data-i18n="media.insert">Insert</span>
+          <div class="foot-actions">
+            <button class="btn ghost sm" id="btn-insert-text" data-i18n-title="media.textTitle">
+              <svg viewBox="0 0 24 24"><use href="#i-text"></use></svg><span data-i18n="media.text">Text</span>
+            </button>
+            <button class="btn ghost sm" id="btn-insert-rect" data-i18n-title="media.rectTitle">
+              <svg viewBox="0 0 24 24"><use href="#i-square"></use></svg><span data-i18n="media.rect">Rectangle</span>
+            </button>
+            <button class="btn ghost sm" id="btn-insert-ellipse" data-i18n-title="media.ellipseTitle">
+              <svg viewBox="0 0 24 24"><use href="#i-circle"></use></svg><span data-i18n="media.ellipse">Ellipse</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <section class="stage" aria-label="Preview" data-i18n-aria="stage.label">
+        <div class="viewport" id="viewport">
+          <div class="canvas-pad" id="canvasPad">
+            <div class="canvas-stack" id="canvasStack" hidden>
+              <canvas id="preview" width="2" height="2"></canvas>
+            </div>
+
+            <!-- Empty stage: the logo only. Import lives in the media panel,
+                 the drop zone and Ctrl+I. -->
+            <div class="empty-state" id="emptyState">
+              <BrandMark class="empty-logo" label="CUT THE FLOW" />
+            </div>
+          </div>
+
+          <div class="stage-zoom" id="stageZoom">
+            <button class="stage-zoom-btn" id="preview-zoom-out" data-i18n-title="stage.zoomOut" data-i18n-aria="stage.zoomOut">
+              <svg viewBox="0 0 24 24"><use href="#i-minus"></use></svg>
+            </button>
+            <button class="stage-zoom-value" id="preview-zoom-value" data-i18n-title="stage.actualSize">100 %</button>
+            <button class="stage-zoom-btn" id="preview-zoom-in" data-i18n-title="stage.zoomIn" data-i18n-aria="stage.zoomIn">
+              <svg viewBox="0 0 24 24"><use href="#i-plus"></use></svg>
+            </button>
+            <span class="stage-zoom-sep" aria-hidden="true"></span>
+            <button class="stage-zoom-btn" id="preview-fit" data-i18n-title="stage.fitTitle" data-i18n-aria="stage.fit">
+              <svg viewBox="0 0 24 24"><use href="#i-fit"></use></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="transport">
+          <button class="transport-btn" id="btn-start" data-i18n-title="transport.startTitle" data-i18n-aria="transport.start">
+            <svg viewBox="0 0 24 24"><use href="#i-start"></use></svg>
+          </button>
+          <button class="transport-play" id="btn-play" data-i18n-title="transport.playTitle" data-i18n-aria="transport.play">
+            <svg class="play-icon" viewBox="0 0 24 24"><use href="#i-play"></use></svg>
+            <svg class="pause-icon" viewBox="0 0 24 24"><use href="#i-pause"></use></svg>
+          </button>
+          <button class="transport-btn" id="btn-end" data-i18n-title="transport.endTitle" data-i18n-aria="transport.end">
+            <svg viewBox="0 0 24 24"><use href="#i-end"></use></svg>
+          </button>
+          <span class="transport-time" id="timeLabel">00:00.000</span>
+          <span class="transport-sep" aria-hidden="true">/</span>
+          <span class="transport-duration" id="durationLabel">00:00.000</span>
+          <input id="scrub" class="scrub" type="range" min="0" max="1" step="0.001" value="0" data-i18n-aria="transport.position" />
+          <label class="snap-toggle" data-i18n-title="transport.snapTitle">
+            <input type="checkbox" id="snapToggle" checked />
+            <svg viewBox="0 0 24 24"><use href="#i-magnet"></use></svg>
+            <span data-i18n="transport.snap">Snap</span>
+          </label>
+        </div>
+      </section>
+
+      <aside class="sidebar tools-sidebar" id="tools-sidebar" aria-label="Tools" data-i18n-aria="act.panelTools">
+        <div class="sidebar-head">
+          <div>
+            <span class="eyebrow" id="toolsEyebrow" data-i18n="eyebrow.selection">Selection</span>
+            <h2 id="toolsTitle" data-i18n="tabs.props">Properties</h2>
+          </div>
+          <span class="clip-chip" id="toolsChip" hidden>clip</span>
+        </div>
+
+        <div class="segmented" role="tablist" data-i18n-aria="tabs.label">
+          <button type="button" data-tab="props" class="is-active" role="tab" data-i18n="tabs.props">Properties</button>
+          <button type="button" data-tab="fx" role="tab" data-i18n="tabs.fx">Effects</button>
+          <button type="button" data-tab="transitions" role="tab" data-i18n="tabs.transitions">Transitions</button>
+        </div>
+
+        <div class="tools-scroll">
+          <div class="panel-body" id="panelProps" role="tabpanel"></div>
+          <div class="panel-body" id="panelFx" role="tabpanel" hidden></div>
+          <div class="panel-body" id="panelTransitions" role="tabpanel" hidden></div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- ── Timeline ─────────────────────────────────────────────────────── -->
+    <section class="timeline-panel" id="timelinePanel" aria-label="Timeline">
+      <div class="timeline-resizer" id="timelineResizer" data-i18n-title="tl.resize"></div>
+
+      <div class="timeline-toolbar">
+        <div class="toolbar-group">
+          <button class="btn ghost sm" id="btn-add-video" data-i18n-title="tl.addVideoTitle">
+            <svg viewBox="0 0 24 24"><use href="#i-film"></use></svg><span data-i18n="tl.addVideo">Video track</span>
+          </button>
+          <button class="btn ghost sm" id="btn-add-audio" data-i18n-title="tl.addAudioTitle">
+            <svg viewBox="0 0 24 24"><use href="#i-music"></use></svg><span data-i18n="tl.addAudio">Audio track</span>
+          </button>
+          <span class="toolbar-sep" aria-hidden="true"></span>
+          <button class="btn ghost sm" id="btn-tool-split" data-i18n-title="act.splitTitle">
+            <svg viewBox="0 0 24 24"><use href="#i-scissors"></use></svg><span data-i18n="act.split">Split</span>
+          </button>
+          <button class="btn ghost sm" id="btn-tool-duplicate" data-i18n-title="act.duplicateTitle">
+            <svg viewBox="0 0 24 24"><use href="#i-duplicate"></use></svg><span data-i18n="act.duplicate">Duplicate</span>
+          </button>
+          <button class="btn ghost sm danger" id="btn-tool-delete" data-i18n-title="act.deleteTitle">
+            <svg viewBox="0 0 24 24"><use href="#i-trash"></use></svg><span data-i18n="act.delete">Delete</span>
+          </button>
+        </div>
+
+        <div class="toolbar-group right">
+          <button class="icon-btn" id="btn-zoom-out" data-i18n-title="tl.zoomOut" data-i18n-aria="tl.zoomOut">
+            <svg viewBox="0 0 24 24"><use href="#i-zoom-out"></use></svg>
+          </button>
+          <button class="icon-btn" id="btn-zoom-in" data-i18n-title="tl.zoomIn" data-i18n-aria="tl.zoomIn">
+            <svg viewBox="0 0 24 24"><use href="#i-zoom-in"></use></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="timeline-body">
+        <div class="track-headers" id="trackHeaders"></div>
+        <div class="timeline-scroll" id="timelineScroll">
+          <div class="timeline-content" id="timelineContent">
+            <div class="ruler" id="ruler"></div>
+            <div class="tracks" id="tracks"></div>
+            <div class="playhead" id="playhead"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="statusbar">
+      <div class="status-left">
+        <span class="status-message" id="statusMessage" data-i18n="status.ready">Ready</span>
+      </div>
+      <div class="status-right">
+        <span id="statusAutosave" class="status-autosave" data-state="saved"
+              data-i18n-title="status.savedLabel" data-i18n-aria="status.savedLabel">
+          <svg viewBox="0 0 24 24"><use href="#i-save"></use></svg>
+          <span id="statusAutosaveText" data-i18n="status.auto">Auto</span>
+        </span>
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="statusFormat">MP4</span>
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="statusDuration">00:00.000</span>
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="statusClips">0</span>
+        <span class="status-zoom" id="statusZoom">80 px/s</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ── Desktop drop veil ──────────────────────────────────────────────── -->
+  <div class="drop-overlay" id="dropOverlay" hidden aria-hidden="true">
+    <div class="drop-card">
+      <BrandMark class="drop-mark" label="" />
+      <strong data-i18n="media.drop">Drop your media</strong>
+      <small data-i18n="media.formats">MP4 · MOV · WebM · MP3 · WAV · PNG</small>
+    </div>
+  </div>
+
+  <!-- ── Export ────────────────────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="exportModal" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
+    <div class="dialog">
+      <header class="dialog-head">
+        <div>
+          <span class="eyebrow" data-i18n="eyebrow.render">Render</span>
+          <h2 id="exportTitle" data-i18n="export.title">Export the edit</h2>
+        </div>
+        <button class="icon-btn" data-close data-i18n-aria="export.close">
+          <svg viewBox="0 0 24 24"><use href="#i-close"></use></svg>
+        </button>
+      </header>
+
+      <div class="dialog-body">
+        <div class="field-grid">
+          <label class="field">
+            <span data-i18n="export.format">Format</span>
+            <select id="exportFormat">
+              <option value="mp4">MP4 — H.264 + AAC</option>
+              <option value="webm">WebM — VP9 + Opus</option>
+              <option value="mp3" data-i18n="export.formatMp3">MP3 — audio only</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="export.quality">Quality</span>
+            <select id="exportQuality">
+              <option value="high" data-i18n="export.qualityHigh">High (CRF 18 / 30)</option>
+              <option value="medium" data-i18n="export.qualityMedium">Balanced (CRF 22 / 34)</option>
+              <option value="fast" data-i18n="export.qualityFast">Fast (CRF 26 / 38)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="export.resolution">Resolution</span>
+            <select id="exportResolution">
+              <option value="1920x1080">1920 × 1080</option>
+              <option value="1280x720">1280 × 720</option>
+              <option value="1080x1920">1080 × 1920</option>
+              <option value="1080x1080">1080 × 1080</option>
+              <option value="3840x2160">3840 × 2160</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="export.fps">Frame rate</span>
+            <select id="exportFps">
+              <option value="23.976">23.976</option>
+              <option value="24">24</option>
+              <option value="25">25</option>
+              <option value="29.97">29.97</option>
+              <option value="30">30</option>
+              <option value="50">50</option>
+              <option value="59.94">59.94</option>
+              <option value="60">60</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="export-summary" id="exportSummary"></div>
+
+        <div class="export-progress" id="exportProgress" hidden>
+          <div class="progress-bar"><div id="exportProgressFill"></div></div>
+          <div class="progress-label">
+            <span id="exportStage" data-i18n="export.preparing">Preparing…</span>
+            <span id="exportPercent">0 %</span>
+          </div>
+        </div>
+
+        <div class="export-result" id="exportResult" hidden></div>
+        <div class="export-error" id="exportError" hidden></div>
+      </div>
+
+      <footer class="dialog-foot">
+        <button class="btn ghost" id="cancelExportBtn" hidden data-i18n="export.cancel">Cancel</button>
+        <span class="foot-spacer"></span>
+        <button class="btn ghost" data-close data-i18n="export.close">Close</button>
+        <button class="btn primary" id="startExportBtn" data-i18n="export.start">Export</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ── Shortcuts ─────────────────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="dialog dialog-narrow">
+      <header class="dialog-head">
+        <div>
+          <span class="eyebrow" data-i18n="act.help">Help</span>
+          <h2 id="helpTitle" data-i18n="help.title">Keyboard shortcuts</h2>
+        </div>
+        <button class="icon-btn" data-close data-i18n-aria="help.close">
+          <svg viewBox="0 0 24 24"><use href="#i-close"></use></svg>
+        </button>
+      </header>
+      <div class="dialog-body">
+        <div class="shortcut-grid" id="shortcutGrid"></div>
+      </div>
+      <footer class="dialog-foot">
+        <span class="foot-note" data-i18n="help.note">The studio is built for mouse and keyboard.</span>
+        <span class="foot-spacer"></span>
+        <button class="btn ghost" data-close data-i18n="help.close">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ── Preferences ───────────────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="prefsModal" role="dialog" aria-modal="true" aria-labelledby="prefsTitle">
+    <div class="dialog dialog-narrow">
+      <header class="dialog-head">
+        <div>
+          <span class="eyebrow" data-i18n="media.eyebrow">Project</span>
+          <h2 id="prefsTitle" data-i18n="prefs.title">Preferences</h2>
+        </div>
+        <button class="icon-btn" data-close data-i18n-aria="export.close">
+          <svg viewBox="0 0 24 24"><use href="#i-close"></use></svg>
+        </button>
+      </header>
+      <div class="dialog-body">
+        <div class="section-title" data-i18n="prefs.appearance">Appearance</div>
+
+        <div class="prefs-row">
+          <div>
+            <strong data-i18n="prefs.theme">Theme</strong>
+            <small data-i18n="prefs.themeHint">The studio is dark by default.</small>
+          </div>
+          <div class="segmented small" id="prefsTheme">
+            <button type="button" data-theme-choice="dark" data-i18n="prefs.dark">Dark</button>
+            <button type="button" data-theme-choice="light" data-i18n="prefs.light">Light</button>
+          </div>
+        </div>
+
+        <div class="prefs-row">
+          <div>
+            <strong data-i18n="prefs.language">Language</strong>
+            <small data-i18n="prefs.languageHint">The interface switches immediately.</small>
+          </div>
+          <div class="segmented small" id="prefsLang">
+            <button type="button" data-lang-choice="en">EN</button>
+            <button type="button" data-lang-choice="fr">FR</button>
+          </div>
+        </div>
+
+        <div class="prefs-row">
+          <div>
+            <strong data-i18n="prefs.format">Default export format</strong>
+            <small data-i18n="prefs.formatHint">Applies to this project and to new ones.</small>
+          </div>
+          <select id="prefsFormat">
+            <option value="mp4">MP4</option>
+            <option value="webm">WebM</option>
+            <option value="mp3">MP3</option>
+          </select>
+        </div>
+
+        <div class="prefs-row">
+          <div>
+            <strong data-i18n="prefs.shortcuts">Shortcuts</strong>
+            <small data-i18n="prefs.showShortcuts">View the shortcut sheet</small>
+          </div>
+          <button class="btn ghost sm" id="prefs-shortcuts" data-i18n="help.title">Keyboard shortcuts</button>
+        </div>
+
+        <div class="prefs-note" id="prefsEngine"></div>
+      </div>
+      <footer class="dialog-foot">
+        <span class="foot-spacer"></span>
+        <button class="btn primary" data-close data-i18n="prefs.done">Done</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="toast-host" id="toastHost" aria-live="polite"></div>
+
+  <input id="fileInput" type="file" multiple accept="video/*,audio/*,image/*" hidden />
+  <input id="projectInput" type="file" accept=".json,application/json" hidden />
+
+  <script>
+    import { boot } from '../scripts/editor';
+    boot();
+  </script>
+</StudioLayout>

@@ -1,0 +1,19 @@
+[package]
+name = "ctf-app"
+description = "CUT THE FLOW — binaire : CLI (doctor/probe/export/serve) et serveur HTTP local de l'interface Astro."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "cuttheflow"
+path = "src/main.rs"
+
+[dependencies]
+ctf-core = { path = "../ctf-core" }
+ctf-engine = { path = "../ctf-engine" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

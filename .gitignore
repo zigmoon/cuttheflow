@@ -1,0 +1,20 @@
+# Dépendances et artefacts de construction
+astro/node_modules/
+astro/.astro/
+astro/dist/
+rust/target/
+
+# Binaires et paquets : livrés par les releases, pas par git
+rust/dist/
+*.exe
+*.AppImage
+*.dmg
+
+# Banc d'export : médias générés et sorties
+rust/verify/
+rust/scripts/media/
+
+# Divers
+*.log
+.DS_Store
+Thumbs.db

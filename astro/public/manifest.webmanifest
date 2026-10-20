@@ -1,0 +1,42 @@
+{
+  "id": "./",
+  "name": "CUT THE FLOW",
+  "short_name": "CTF Editor",
+  "description": "CUT THE FLOW : montage vidéo multipiste, effets, transitions et formes. Import local, export MP4, WebM et MP3 par un moteur Rust déterministe.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0c0c0f",
+  "theme_color": "#0c0c0f",
+  "orientation": "landscape-primary",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "img/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "img/CUT_THE_FLOW_b.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["productivity", "photo", "video"]
+}
