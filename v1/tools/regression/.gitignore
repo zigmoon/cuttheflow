@@ -1,0 +1,6 @@
+# Artefacts du banc de régression — jamais versionnés
+media/
+out/
+.*-profile/
+# Journaux de run (redirections de la console du banc)
+*-run.txt

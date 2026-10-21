@@ -1,0 +1,90 @@
+# CUT THE FLOW
+
+> CUT THE FLOW is a browser-based non-linear video editor (NLE) that runs entirely on the client
+> side. Multi-track timeline, audio mixing, colour grading, text and shape overlays, an AI editing
+> assistant, and frame-accurate export to MP4, WebM or MP3. Nothing is uploaded, no server is
+> involved, no account is required.
+
+## Key features
+
+- **Timeline editing** — multi-track NLE: drag & drop, split, trim, ripple edit, J-cut, L-cut,
+  insert edit, snap-to-grid, per-track mute / solo / volume.
+- **Audio** — multi-track mixing, per-clip fades, audio unlinked from video, waveform display.
+- **Export — exactly 3 formats, one engine each**
+  - **MP4** — H.264 + AAC, the universal choice (mobiles, TV, YouTube).
+  - **WEBM** — VP9 + Opus, smaller files at equal quality.
+  - **MP3** — the timeline audio only, encoded with LAME (not re-encoded from a video codec).
+  All three encode **offline, frame by frame**: the output does not depend on the machine speed,
+  and audio and video stay aligned (measured drift: **0 ms**).
+- **Colour grading** — lift / gamma / gain, saturation, contrast, temperature, filter presets.
+- **Effects** — 12 clip effects (pixelate, blur, invert, shake, mirror, glitch, scanlines, VHS,
+  grain, duotone, teal-orange, RGB split), fades and transitions.
+- **Text & overlays** — custom fonts (TTF / OTF / WOFF), size, colour, position, optional shadow,
+  animations, auto-generated subtitles.
+- **AI assistant** — natural-language editing. **DeepSeek V4.1 Flash by default**, plus
+  OpenRouter, Groq, OpenAI, Anthropic and Google Gemini. Speaks French and English.
+- **Projects** — `.ctf` (project + media bundled) or `.json` (lightweight). Both record the app
+  version and the export format, so a reopened project keeps its settings. Auto-save to
+  IndexedDB; optional IPFS publishing via Pinata.
+- **PWA** — installable, works offline through a service worker.
+- **Large sources** — automatic proxy generation for 4K and above.
+
+## Technical stack
+
+- Pure client-side: HTML5, CSS3, JavaScript ES2022 — no framework, no build step, no bundler.
+- One page (`index.html`) and one main class (`CutTheFlow`, in `js/app.js`).
+- APIs: Canvas 2D, WebCodecs (`VideoEncoder` / `AudioEncoder` / `VideoFrame`), Web Audio,
+  MediaRecorder (fallback only), IndexedDB, Service Worker.
+- Vendors shipped locally: JSZip 3.10.1, MP4Box.js 0.5.2 (patched), lamejs 1.2.1 (LAME 3.100).
+
+## Quality — measured, not claimed
+
+A permanent regression bench (`tools/regression/`) replays a **13-second, 5-track control edit**
+(two videos, one photo, a title, a shape, two audio tracks) through the three export engines,
+saves and reopens the project, then verifies the produced files with ffmpeg. Latest run —
+**29 checks out of 29**:
+
+- 390/390 frames in MP4 and in WebM, valid MP3;
+- **0 ms** audio/video sync offset, identical in the three formats;
+- **0 duplicated and 0 skipped** frames during frame extraction;
+- no black frame at the clip boundaries;
+- **0 frames differing** from the source (pixel-level fidelity);
+- layer order, text and shape overlays present only inside their time range;
+- both `.ctf` and `.json` reopen with the same 5 tracks / 7 clips and the same export format.
+
+## URLs
+
+- Website: https://cuttheflow.com
+- Sitemap: https://cuttheflow.com/sitemap.xml
+- Humans: https://cuttheflow.com/humans.txt
+- Releases (all Zigmoon apps): https://app.zigmoon.com/release.html
+
+## Usage
+
+Open the app in a modern browser (Chrome, Edge, Firefox, Safari), drag media onto the window,
+arrange clips on the timeline, apply effects and colour grading, optionally ask the AI assistant
+to edit, then export to MP4, WebM or MP3. Everything happens on the device.
+
+## Version
+
+**3.10.1** — September 2026. Three rewritten export engines with frame-accurate offline encoding,
+a permanent regression bench, sample-accurate MP3, DeepSeek V4.1 Flash as the default AI model,
+and a true-black interface.
+
+## Creator
+
+Simon Dupont (Zigmoon)
+
+## Licensing
+
+CUT THE FLOW is **proprietary software — all rights reserved** by its author (Simon Dupont /
+Zigmoon). It is not open source. Full text: https://cuttheflow.com/LICENSE
+
+- **Allowed**: using the hosted web application and publishing the videos you produce with it.
+  Your media and your exports belong to you.
+- **Not allowed** without written permission: copying, redistributing, reselling, hosting,
+  modifying, creating derivative works, removing copyright notices, or using the software (or
+  its code) to build, train or improve a competing product.
+- **Third-party libraries** bundled locally (JSZip, MP4Box.js, lamejs) and the fonts keep their
+  own licenses, which prevail over this one for the parts they cover.
+- Commercial licensing, custom builds and partnerships: contact@zigmoon.com

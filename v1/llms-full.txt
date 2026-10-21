@@ -1,0 +1,327 @@
+# CUT THE FLOW — Full Documentation for LLMs
+
+> CUT THE FLOW is a browser-based non-linear video editor (NLE) that runs entirely on the client
+> side. This document is the technical and functional reference for AI systems that need to
+> understand, describe or operate the application.
+
+**Version**: 3.10.1 (September 2026)
+**Author**: Simon Dupont (Zigmoon)
+**Website**: https://cuttheflow.com
+**Releases**: https://app.zigmoon.com/release.html
+
+---
+
+## 1. Overview
+
+CUT THE FLOW is a 100 % client-side video editing application. There is no server, no upload and
+no account: media files are read locally by the browser and never leave the device. It supports
+multi-track timeline editing with five clip types: **video, audio, image, text overlay** and
+**colour block**.
+
+Typical workflow: import media by drag & drop → arrange clips on the timeline → cut, trim, fade,
+apply effects and colour grading → optionally ask the AI assistant to perform edits → export to
+MP4, WebM or MP3.
+
+---
+
+## 2. Architecture
+
+### File structure
+
+| File | Role |
+|---|---|
+| `index.html` | Single entry point: all UI markup (toolbar, media library, preview, timeline, modals) |
+| `js/app.js` | Core application, one class: `CutTheFlow` (exposed as `window.app`) |
+| `js/frame-source.js` | `CTFFrameSource` — frame-accurate image extraction for the export engines |
+| `js/webcodecs-export.js` | MP4 engine: WebCodecs H.264 + AAC, muxed with MP4Box |
+| `js/webm-webcodecs-export.js` | WebM engine: WebCodecs VP9 + Opus, inline EBML muxer |
+| `js/mp3-export.js` | MP3 engine: audio-only export through LAME |
+| `js/canvas-export.js` | Last-resort real-time engine (MediaRecorder), non-deterministic |
+| `js/export-safeguards.js` | Capability detection and memory guards for export |
+| `js/ctf-advanced.js` | Waveforms, transitions, subtitles, performance index |
+| `js/i18n.js` | French / English strings |
+| `css/style.css` | Entire dark-theme stylesheet |
+| `service-worker.js` | Offline app-shell caching |
+| `manifest.json` | PWA manifest |
+| `tools/regression/` | Permanent export test bench (Chrome + ffmpeg, no npm dependency) |
+| `vendor/` | JSZip 3.10.1, MP4Box.js 0.5.2 (patched), lamejs 1.2.1 (LAME 3.100) |
+
+No build step, no bundler. Every JavaScript file is loaded by a `<script>` tag in `index.html`
+and listed in the service worker's `APP_SHELL`.
+
+### Core class `CutTheFlow`
+
+Manages the media library (import, thumbnails, proxy generation), the timeline (tracks, clips,
+playhead, zoom, snapping), the preview, colour grading, the clip effects, the three export
+engines, the AI assistant, the undo/redo history, the auto-save (IndexedDB, every 30 s) and the
+project files.
+
+---
+
+## 3. Timeline model
+
+### Tracks
+
+- Stacked vertically; **track 0 (`VIDEO 1`, top of the UI) is the foreground**, drawn last.
+- Default tracks: `VIDEO 1`, `VIDEO 2`, `VIDEO 3`, `AUDIO 1`, `AUDIO 2`.
+- Properties: `id`, `name`, `muted`, `solo`, `volume` (0-100), `clips[]`.
+
+### Clips
+
+- Placed by `startTime` + `duration`, in seconds.
+- `sourceStart` = offset into the original media (for trimmed clips); `sourceDuration` = original
+  duration.
+- Common properties: `trackIndex`, `trackId`, fades (`fadeIn`, `fadeOut`), effects, animation
+  preset.
+
+### Clip types
+
+| Type | Description |
+|---|---|
+| `video` | References a media item. `videoScale`, `videoPosX`, `videoPosY`, optional `transition`, optional subtitles |
+| `audio` | References a media item. Can be created by unlinking a video's audio |
+| `image` | Still frame for the clip duration, with the same spatial transform as video |
+| `text` | Canvas-rendered text: `content`, `style` (font, size, colour, optional shadow), `posX`/`posY` in percent |
+| `block` | Coloured rectangle: `color`, `width`/`height`, `posX`/`posY` (percent), `opacity` |
+
+---
+
+## 4. Export engines
+
+The export dialog offers **exactly three choices — MP4, WebM, MP3** — with no mode tabs and no
+engine picker: the engine follows from the format.
+
+### MP4 — WebCodecs H.264 + AAC (offline, deterministic)
+
+- `VideoEncoder` (H.264) + `AudioEncoder` (AAC-LC, 48 kHz stereo, 192 kbps).
+- Muxed to MP4 by MP4Box.js, including a hand-written `esds` box for the audio track.
+- Every frame is decoded **exactly at its timeline position** before being encoded, so the result
+  is identical on every machine — only the elapsed time varies.
+- If the browser cannot encode H.264, the export falls back to WebM **and says so**.
+
+### WebM — WebCodecs VP9 + Opus (offline, deterministic)
+
+- `VideoEncoder` (VP9) + `AudioEncoder` (Opus, 48 kHz stereo, 128 kbps).
+- Muxed by an inline EBML/WebM muxer that uses the encoder's **real `OpusHead`** (correct
+  `preSkip`), so the audio is not shifted.
+- Smaller files at equal quality; the recommended format for long montages.
+- Falls back to the real-time engine only if VP9 is unavailable, with an explicit warning.
+
+### MP3 — audio only, LAME 3.100
+
+- The timeline audio is decoded, mixed (track volume, fades, unlinked audio, time bounds) and
+  encoded with `lamejs` (LAME) at 48 kHz stereo, 192 kbps.
+- The MPEG-1 Layer III encoder delay is compensated, so MP3 landmarks fall at the **same instants**
+  as in the MP4 export.
+
+### Frame-accurate extraction (`js/frame-source.js`)
+
+Each video clip gets its own `<video>` element, left **paused**. For every output frame the engine
+seeks to the **middle** of the wanted frame and waits for `seeked`. Reason: seeking exactly on a
+frame boundary makes Chrome return the wrong frame one time out of three (measured), which
+produced duplicated and skipped images — the cause of the stutter and the audio/video drift that
+affected earlier builds.
+
+Per-clip statistics are reported at the end of every export (`seeks`, `duplicates`, `skips`,
+`errAvg`, `errMax`, `failures`); the reference values are **0 duplicates, 0 skips, 0.0 ms**.
+
+### Real-time fallback (`js/canvas-export.js`)
+
+Last-resort MediaRecorder path for browsers without WebCodecs. It is **not** deterministic
+(measured drift from −2.4 % to +11.6 % on long montages) and the user is always warned before it
+is used.
+
+### Export guards
+
+- If the hardware encoder stalls, the export fails after **20 seconds** with an explicit message
+  instead of waiting forever.
+- An export started in a **background tab** is frozen by the browser: the app warns the user to
+  keep the tab visible.
+- The chosen export format is remembered in `localStorage` and inside the project file.
+
+---
+
+## 5. Quality assurance — the permanent regression bench
+
+`tools/regression/` drives a real Chrome through the DevTools protocol (no npm dependency) and
+verifies the produced files with ffmpeg. It builds a **13-second, 5-track control edit** — two
+videos with audio landmarks (440/880 Hz and 1 200 Hz), one photo, a title, a shape and two audio
+tracks — exports it in the three formats, saves the project as `.ctf` and `.json`, reloads the
+page, reopens both files, then checks everything.
+
+Reference results (latest run: **29 checks out of 29**):
+
+| Check | Result |
+|---|---|
+| Frames | 390 / 390 (MP4 and WebM) |
+| Audio landmarks | exact instants, **0 ms** offset |
+| Sync difference WebM / MP3 vs MP4 | **0 ms** |
+| Frame extraction | 300 seeks, **0 duplicates, 0 skips, 0.0 ms error** |
+| Black frames at the cuts | none |
+| Fidelity against the source | **0 differing frames** (max deviation 1/255) |
+| Layer order, text, shape | present only inside their time range |
+| Project round trip | 5 tracks / 7 clips / 5 media, export format restored |
+
+Usage:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/regression/make-media.ps1   # once
+node tools/regression/montage.cjs            # full run
+node tools/regression/montage.cjs --quick    # MP4 export only
+```
+
+---
+
+## 6. AI assistant
+
+### Providers — order of display, **DeepSeek first and default**
+
+| Provider | Models offered |
+|---|---|
+| **DeepSeek** (default) | `deepseek-flash` = **DeepSeek-V4.1-Flash**, `deepseek-v4-pro` |
+| **OpenRouter** | no-cost tier models (`:free` suffix) and paid ones |
+| **Groq** | no-cost tier models, very fast inference |
+| **OpenAI** | GPT-5.1, GPT-5, GPT-5 Mini, GPT-4.1, o3, o4-mini |
+| **Anthropic** | Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5 |
+| **Google** | Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.5 Flash-Lite |
+
+### Integration
+
+- Direct browser-to-API calls; the provider must allow CORS.
+- **One API key per provider**, stored in `localStorage` under `ctf_ai_apikey_<provider>`
+  (an older global `ctf_ai_apikey` is still read as a fallback for DeepSeek).
+- Conversation history is kept (maximum 20 messages).
+- DeepSeek, OpenRouter, Groq and OpenAI share one OpenAI-compatible code path, which retries
+  without the optional parameters when the API answers 400 or 422.
+- Responses are parsed defensively: ```json fences, surrounding prose and trailing commas are
+  tolerated.
+
+### Action schema
+
+The assistant answers with JSON: `{ "explanation": "...", "actions": [ ... ] }`.
+
+| Action | Effect |
+|---|---|
+| `ADD_CLIP` | Add media from the library to a track |
+| `DELETE_CLIP` | Remove a clip |
+| `MOVE_CLIP` | Reposition a clip (time / track) |
+| `TRIM_CLIP` | Change a clip's in / out points |
+| `SPLIT_CLIP` | Cut a clip at a given time |
+| `RIPPLE_DELETE` | Delete a clip and close the gap |
+| `SET_CLIP_PROPERTY` | Set a clip property (name, content, colour, opacity, dimensions) |
+| `SET_CLIP_STYLE` | Update a text clip's styling |
+| `UNLINK_AUDIO` | Extract a video's audio onto its own track |
+| `ADD_TEXT` | Create a text overlay |
+| `ADD_BLOCK` | Create a colour block |
+| `ADD_TRACK` / `DELETE_TRACK` | Track management |
+| `MUTE_TRACK` / `SOLO_TRACK` / `SET_VOLUME` / `RENAME_TRACK` | Track controls |
+| `SET_COLOR_GRADING` | Global colour grading |
+| `APPLY_FILTER_PRESET` | Named presets (cinema, vintage, noir, sepia, …) |
+| `SEEK` / `MARK_IN` / `MARK_OUT` / `SET_ZOOM` | Navigation |
+
+---
+
+## 7. Keyboard shortcuts
+
+**Playback**
+
+| Key | Action |
+|---|---|
+| `Space` / `K` | Play / Pause |
+| `J` | Rewind 1 s |
+| `L` | Forward 1 s |
+| `←` / `→` | Step back / forward one frame |
+| `Home` / `End` | Go to start / end |
+
+**Editing**
+
+| Key | Action |
+|---|---|
+| `C` | Cut at the playhead |
+| `Ctrl+C` / `Ctrl+V` | Copy / paste a clip |
+| `U` | Unlink audio from video |
+| `Delete` | Delete the selected clip |
+| `Shift+Delete` | Ripple delete |
+| `I` / `O` | Mark in / mark out |
+
+**Text and overlays**
+
+| Gesture | Action |
+|---|---|
+| Double-click | Edit a text clip |
+| Drag | Move a text or colour block in the preview |
+| Drag a corner handle | Resize video / image (aspect ratio preserved) |
+
+**View and project**
+
+| Key | Action |
+|---|---|
+| `+` / `-` | Zoom in / out |
+| `Ctrl+P` | Toggle the properties panel |
+| `Ctrl+S` | Save the project |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
+| `Escape` | Deselect / close a panel |
+
+---
+
+## 8. Projects, auto-save and publishing
+
+- **`.ctf`** — JSZip archive containing `project.json` plus the media blobs: a self-contained
+  project.
+- **`.json`** — the project description only; media stay referenced by URL.
+- Both formats store `appVersion` and `selectedFormat`, so a reopened project comes back with the
+  same export format. Projects saved by older versions still open.
+- `Infinity` is serialised as `"__INF__"` and restored on load (used by image clips, whose source
+  duration is infinite).
+- An auto-save runs every 30 seconds into IndexedDB (`ctf_autosave`, key `latest`) and is offered
+  for restoration at start-up.
+- Publishing to IPFS through Pinata is available; the JWT is kept in `sessionStorage` only.
+
+---
+
+## 9. Offline use (PWA)
+
+`service-worker.js` pre-caches the app shell (`CACHE_NAME`, versioned per release) and
+`manifest.json` makes the app installable. The shell list must stay synchronised with the
+`?v=` cache-busters used in `index.html`; a release changes both.
+
+---
+
+## 10. Interface conventions
+
+- Dark theme, **true black** backgrounds (`#000`) for the toolbar, panels, timeline and track
+  lanes; track separation lines are deliberately faint (`#131317`) and the time grid uses 3 %
+  white.
+- Track buttons **M** (mute) and **S** (solo) are outlined; only their active states are filled
+  (red for mute, orange for solo).
+- Timeline, ruler, zoom, properties panel and media library are keyboard reachable; focus rings
+  are visible and `prefers-reduced-motion` is respected.
+
+---
+
+## 11. Known limits and behaviour worth knowing
+
+- **The real-time engine is not deterministic.** If WebCodecs is unavailable, the app falls back
+  to MediaRecorder and warns the user; the output length can drift on long montages.
+- **Background tabs freeze the export**: browsers throttle hidden tabs. Keep the tab visible.
+- **Vendor libraries are loaded locally** (`vendor/`) so the app works offline; do not replace
+  them with CDN links without updating the service worker.
+- **The MP4 muxer is a local build of MP4Box.js with a patch** (the `first_dts` fix, without which
+  every track is shifted by one frame). Do not restore the unpatched file.
+- Long montages are best exported to **WebM (VP9 + Opus)**, which is the most exact on very long
+  timelines; MP4 is recommended for compatibility.
+
+---
+
+## 12. Licensing
+
+CUT THE FLOW is **proprietary software — all rights reserved** by its author (Simon Dupont / Zigmoon). It is not open source. The full text ships with the project as `LICENSE` and is published at https://cuttheflow.com/LICENSE
+
+- **Granted**: a personal, non-exclusive, non-transferable right to use the hosted web application, to keep a backup copy, and to own and publish everything produced with it (the user's media and exported videos carry no claim from the author).
+- **Prohibited without written permission**: copying, publishing, distributing, sublicensing, selling, renting, hosting or mirroring the software; modifying it or creating derivative works; reverse engineering; removing or hiding copyright notices, branding or version identifiers; using the code to build, train or improve a competing product or model; presenting the software as one's own work.
+- **Third-party components** bundled in `vendor/` (JSZip, MP4Box.js, lamejs) and the fonts keep their own licenses, which prevail over this one for the parts they cover.
+- Commercial licensing, custom builds, white-labelling and partnerships: **contact@zigmoon.com**
+- No warranty; liability limited to the maximum extent permitted by law; governed by French law.
+
+

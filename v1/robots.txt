@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Allow: /llms.txt
+Allow: /llms-full.txt
+Disallow: /js/
+Disallow: /css/
+
+# Sitemap
+Sitemap: https://cuttheflow.com/sitemap.xml
+
+# LLMs.txt
+# https://llmstxt.org
+# AI-readable documentation at /llms.txt and /llms-full.txt
+
+# Crawl-delay
+Crawl-delay: 1

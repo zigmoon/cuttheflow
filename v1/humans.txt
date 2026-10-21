@@ -1,0 +1,15 @@
+/* TEAM */
+Developer: CUT THE FLOW Team
+Site: https://cuttheflow.com
+Location: Global
+
+/* THANKS */
+To all video editors and content creators worldwide
+
+/* SITE */
+Last update: 2026/09/17
+Language: English, French
+Standards: HTML5, CSS3, JavaScript ES2022
+Components: WebCodecs API (VideoEncoder / AudioEncoder), Canvas 2D, Web Audio, IndexedDB, Service Worker
+Software: Visual Studio Code, GitHub Copilot
+License: Proprietary — all rights reserved (see LICENSE)

@@ -1,0 +1,17 @@
+# Dépendances et artefacts de la v2
+astro/node_modules/
+astro/.astro/
+rust/target/
+
+# Banc de régression de la v1 : médias générés, sorties et profil Chrome local
+tools/regression/media/
+tools/regression/out/
+tools/regression/.chrome-profile/
+
+# Banc d'effets de la v1 : profils Chrome, rendus et montage de travail
+_fx/chrome-profile-*/
+_fx/out/
+_fx/*.mp4
+
+# Fichiers temporaires de diagnostic
+*.log

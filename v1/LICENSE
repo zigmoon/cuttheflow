@@ -1,0 +1,157 @@
+CUT THE FLOW — PROPRIETARY LICENSE
+All rights reserved.
+Copyright (c) 2026 Simon Dupont (Zigmoon). All rights reserved.
+
+Version 1.0 — 17 September 2026
+
+------------------------------------------------------------------------------
+1. OWNERSHIP
+------------------------------------------------------------------------------
+
+CUT THE FLOW (the "Software") — including its source code, HTML, CSS,
+JavaScript, documentation, design, user interface, graphics, text, project
+files and any accompanying material — is the exclusive property of
+Simon Dupont / Zigmoon (the "Author").
+
+The Software is protected by copyright law and by international copyright
+treaties. All rights not expressly granted in this license are reserved by
+the Author.
+
+------------------------------------------------------------------------------
+2. WHAT YOU MAY DO
+------------------------------------------------------------------------------
+
+Subject to full compliance with this license, you are granted a personal,
+non-exclusive, non-transferable and revocable right to:
+
+  (a) use the hosted web application at https://cuttheflow.com (and its
+      sub-paths) through a web browser, for your own personal or
+      professional video editing;
+
+  (b) create, save, export and publish the videos you produce with the
+      Software. You own your own media and your own output — this license
+      claims no rights over them;
+
+  (c) keep a copy of the Software for backup purposes only, if that copy is
+      not used, published or distributed.
+
+This is a license to USE the Software, not a sale of the Software.
+
+------------------------------------------------------------------------------
+3. WHAT YOU MAY NOT DO
+------------------------------------------------------------------------------
+
+Without the prior written permission of the Author, you may NOT:
+
+  (a) copy, publish, distribute, sublicense, sell, rent, lease, lend or
+      otherwise make the Software, or any part of it, available to any third
+      party;
+
+  (b) modify, adapt, translate, transform or create derivative works based on
+      the Software, in whole or in part;
+
+  (c) reverse engineer, decompile or disassemble the Software, or attempt to
+      derive its source code, except to the extent such restriction is
+      expressly prohibited by applicable law;
+
+  (d) remove, hide, alter or circumvent any copyright notice, author
+      attribution, branding, logo, version identifier or technical protection
+      measure contained in the Software;
+
+  (e) use the Software, or any part of it, to build, train, fine-tune or
+      improve another product, service, model or application that competes
+      with, replaces or reproduces the functionality of the Software;
+
+  (f) host, mirror, embed or redistribute the Software (or a modified version
+      of it) on any website, application store, repository, package registry
+      or network, whether free of charge or not;
+
+  (g) use the name "CUT THE FLOW", the "Zigmoon" name or any associated logo,
+      icon or visual identity, in a way that suggests an official
+      affiliation, endorsement or origin that does not exist;
+
+  (h) claim authorship of the Software, or present it as your own work, in
+      whole or in part.
+
+Publishing the source code in a public repository does NOT place it in the
+public domain and does NOT grant any right beyond those expressly listed in
+section 2.
+
+------------------------------------------------------------------------------
+4. COMMERCIAL AND CUSTOM USE
+------------------------------------------------------------------------------
+
+Any use not expressly granted in section 2 — including commercial
+redistribution, integration into a paid product or service, white-labelling,
+or a customized build — requires a separate written agreement with the
+Author. Requests: contact@zigmoon.com
+
+------------------------------------------------------------------------------
+5. THIRD-PARTY COMPONENTS
+------------------------------------------------------------------------------
+
+The Software includes third-party libraries distributed under their own
+licenses, in particular:
+
+  - JSZip, MP4Box.js, lamejs — see the files under `vendor/` and their
+    respective license terms;
+  - fonts and icons under their respective licenses.
+
+Those components remain governed by their own licenses, which prevail over
+this license for the parts they cover. Nothing in this license restricts your
+rights under those licenses.
+
+------------------------------------------------------------------------------
+6. NO WARRANTY
+------------------------------------------------------------------------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, ACCURACY AND NON-INFRINGEMENT.
+
+The Author does not warrant that the Software will be error-free,
+uninterrupted, secure, or that it will meet your requirements. You use the
+Software at your own risk and are solely responsible for the media you
+process with it and for the videos you produce and publish.
+
+------------------------------------------------------------------------------
+7. LIMITATION OF LIABILITY
+------------------------------------------------------------------------------
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE AUTHOR SHALL NOT BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL OR
+PUNITIVE DAMAGES, OR FOR ANY LOSS OF DATA, MEDIA, PROFITS, REVENUE OR
+GOODWILL, ARISING OUT OF OR IN CONNECTION WITH THE USE OF, OR INABILITY TO
+USE, THE SOFTWARE — EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+This limitation does not exclude liability that cannot be excluded under
+applicable law.
+
+------------------------------------------------------------------------------
+8. TERMINATION
+------------------------------------------------------------------------------
+
+This license is effective until terminated. It terminates automatically and
+immediately if you breach any of its terms. On termination you must stop all
+use of the Software and destroy any copy in your possession. Sections 3, 6,
+7, 9 and 10 survive termination.
+
+------------------------------------------------------------------------------
+9. GOVERNING LAW
+------------------------------------------------------------------------------
+
+This license is governed by French law. Any dispute relating to its
+interpretation or performance falls under the exclusive jurisdiction of the
+French courts, without prejudice to any mandatory consumer protection rules
+that may apply in your country of residence.
+
+------------------------------------------------------------------------------
+10. CONTACT
+------------------------------------------------------------------------------
+
+Author : Simon Dupont (Zigmoon)
+E-mail : contact@zigmoon.com
+Website: https://cuttheflow.com
+
+For any use beyond the rights granted in section 2 — commercial licensing,
+custom builds, redistribution, hosting or partnership — please get in touch.

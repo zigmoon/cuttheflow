@@ -174,6 +174,8 @@ rust/
   crates/ctf-app          binary: CLI, local HTTP server, embedded UI
   scripts/verify-export.mjs   45-check export bench
   scripts/build.ps1           Windows + Linux release build
+v1/                       the browser-only editor (previous generation)
+docs/                     audit report, v2 decisions, screenshot
 ```
 
 **The interface encodes nothing.** It sends the project to the engine and plays
@@ -257,13 +259,21 @@ fades, effect names, transition bounds, colours, media types, even dimensions.
 
 ---
 
-## A note on version 1
+## The previous generation: `v1/`
 
-This repository is the v2. The browser-only editor (v1) still exists in the
-`SUPERPRINT` repository under `CUTTHEFLOW/`; it passes its own 29/29 browser
-bench. v1's dead export path (2 305 lines) and three unused engines were removed
-during the audit that led here, and the audit report is in
+`v1/` holds the browser-only editor that came before: one `index.html`, a large
+`js/app.js`, WebCodecs-based export engines, a service worker, a PWA manifest.
+It is kept here — not somewhere else — because it is the same product, and
+because it is the reference the Rust engine was measured against.
+
+It still works and passes its own **29/29** browser bench
+(`v1/tools/regression/montage.cjs`, real Chrome + ffmpeg). During the audit that
+led to v2, its dead export path (2 305 lines) and three never-loaded engines
+were removed, and the audit report is in
 [`docs/AUDIT-COMPLET-2026-10-20.md`](docs/AUDIT-COMPLET-2026-10-20.md).
+
+Nothing in `astro/` or `rust/` imports from `v1/`: the two generations are
+independent, and v1 is not built by the release workflow.
 
 ---
 

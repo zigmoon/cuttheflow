@@ -14,6 +14,14 @@ rust/dist/
 rust/verify/
 rust/scripts/media/
 
+# Banc v1 : profils Chrome et rendus locaux
+v1/tools/regression/media/
+v1/tools/regression/out/
+v1/tools/regression/.chrome-profile/
+v1/_fx/chrome-profile-*/
+v1/_fx/out/
+v1/_fx/*.mp4
+
 # Divers
 *.log
 .DS_Store

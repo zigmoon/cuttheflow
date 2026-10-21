@@ -1,0 +1,26 @@
+[
+ {
+  "fx": "none",
+  "err": null,
+  "ms": 2447,
+  "size": 1616129
+ },
+ {
+  "fx": "pixelate",
+  "err": null,
+  "ms": 2448,
+  "size": 456157
+ },
+ {
+  "fx": "noise",
+  "err": null,
+  "ms": 3722,
+  "size": 1998719
+ },
+ {
+  "fx": "vhs",
+  "err": null,
+  "ms": 4157,
+  "size": 2131772
+ }
+]
