@@ -192,7 +192,13 @@ jobs:
           cp rust/scripts/lisez-moi-dist.txt out/LISEZ-MOI.txt
           cp LICENSE out/LICENSE
           cd out
-          shasum -a 256 "${{ matrix.artifact_name }}" > "${{ matrix.artifact_name }}.sha256"
+          # `shasum` n'existe pas dans Git Bash sous Windows : on prend ce qui
+          # est disponible plutôt que de spécialiser l'étape par système.
+          if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "${{ matrix.artifact_name }}" > "${{ matrix.artifact_name }}.sha256"
+          else
+            sha256sum "${{ matrix.artifact_name }}" > "${{ matrix.artifact_name }}.sha256"
+          fi
           cat "${{ matrix.artifact_name }}.sha256"
 
       - uses: actions/upload-artifact@v4
