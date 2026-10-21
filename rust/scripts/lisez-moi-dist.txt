@@ -1,5 +1,5 @@
-CUT THE FLOW 2 — binaires
-=========================
+CUT THE FLOW — binaires
+======================
 
 Chaque fichier est un exécutable AUTONOME : l'interface Astro est embarquée
 dans le binaire, il n'y a rien à installer à côté.
@@ -7,7 +7,13 @@ dans le binaire, il n'y a rien à installer à côté.
   cuttheflow-windows-x86_64.exe   Windows 10/11 (64 bits)
   cuttheflow-linux-x86_64         Linux x86-64 (statique, musl)
   cuttheflow-linux-aarch64        Linux ARM64 (Raspberry Pi, serveurs ARM)
-  cuttheflow-macos-*              macOS (produits par le workflow GitHub Actions)
+  cuttheflow-macos-arm64          macOS Apple Silicon (signé ad-hoc)
+  cuttheflow-macos-x86_64         macOS Intel (signé ad-hoc)
+
+Les deux binaires macOS sont produits par GitHub Actions
+(`zigmoon/cuttheflow`), signés ad-hoc — obligatoire sur Apple Silicon — et
+notariés si les secrets Apple sont configurés. ffmpeg reste requis : posez-le
+à côté du binaire ou dans le PATH (`cuttheflow doctor` pour vérifier).
 
 Lancement
 ---------

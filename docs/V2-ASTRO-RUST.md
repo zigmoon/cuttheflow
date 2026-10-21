@@ -15,8 +15,14 @@ a été fait, et ce qui reste.
 | Binaire Windows | `rust/dist/cuttheflow-windows-x86_64.exe` | ✅ |
 | Binaire Linux x86-64 (musl) | `rust/dist/cuttheflow-linux-x86_64` | ✅ |
 | Binaire Linux ARM64 (musl) | `rust/dist/cuttheflow-linux-aarch64` | ✅ |
-| Binaire macOS (arm64 + Intel) | CI GitHub Actions | workflow ✅, exécution à faire |
-| Signature / notarisation macOS | même workflow | ad-hoc par défaut, Developer ID si secrets |
+| Binaire macOS Apple Silicon | `rust/dist/cuttheflow-macos-arm64` | ✅ (CI) |
+| Binaire macOS Intel | `rust/dist/cuttheflow-macos-x86_64` | ✅ (CI) |
+| Signature / notarisation macOS | même workflow | ad-hoc appliquée, Developer ID si secrets |
+
+Dépôt dédié : **`zigmoon/cuttheflow`**, branches `main` et `v2` (arborescence
+autonome `astro/` + `rust/` + `docs/`, README du produit). CI « CUT THE FLOW 2 »
+verte sur les quatre cibles : Windows x86-64, Linux x86-64, macOS Apple Silicon,
+macOS Intel ; les quatre fichiers sont publiés en artefacts du run.
 
 ## Décisions structurantes
 
@@ -66,6 +72,10 @@ Refonte complète à partir du langage visuel de SuperPhoto (thème sombre), mai
 `img/CUT_THE_FLOW_b.svg`, vérifié au pixel), et les icônes d'onglet, d'application
 et le manifeste sont les fichiers de la v1.
 
+Langue : **anglais par défaut**, français disponible dans les préférences
+(`astro/src/scripts/i18n.ts`, anglais canonique, français en table). Le choix est
+mémorisé et appliqué avant le premier rendu, comme le thème.
+
 - jetons de couleur `--bg-base #121214`, `--bg-surface #16161a`,
   `--line #26262c`, typographie monospace pour les valeurs ;
 - barre supérieure de 58 px : marque, actions fichier, identité du projet,
@@ -96,6 +106,31 @@ Application de bureau assumée : glisser-déposer **depuis le bureau** (voile pl
 L'écran d'accueil (logo + « moteur local ») reprend celui de la v1 : il s'efface
 dès que le moteur a répondu, avec un plafond de 2,5 s et un filet de sécurité à
 4 s.
+
+### Troisième passe — doublons, langue, écran vide
+
+| Symptôme | Cause | Correction |
+|---|---|---|
+| Le thème se règle à deux endroits (barre supérieure **et** préférences) | deux contrôles pour le même réglage | un seul : Apparence, dans les préférences |
+| « Importer » existait quatre fois (barre, panneau, zone de dépôt, état vide) | ajouts successifs | panneau médias + zone de dépôt + `Ctrl+I` ; la barre n'en porte plus |
+| Couper / dupliquer / supprimer en double (barre **et** barre de timeline) | idem | une seule maison : la barre de timeline, qui agit sur la sélection |
+| Texte / forme en double (pied du panneau médias **et** barre de timeline) | idem | une seule maison : le pied du panneau médias (texte, rectangle, ellipse) |
+| Le pourcentage de zoom de l'aperçu refaisait « ajuster » | deux boutons pour la même action | le pourcentage ramène à 100 %, « ajuster » reste à côté |
+| FPS affiché deux fois (identité du projet **et** barre d'état) | redondance | l'identité porte la définition, la barre d'état la durée et les clips |
+| Le logo ouvrait les raccourcis **et** le bouton Aide aussi | parité v1 mal placée | le logo est décoratif, l'aide est un bouton |
+| Écran de prévisualisation bavard au démarrage | accroche + paragraphe + deux boutons + liste de technologies | **le logo, seul** (idem pour l'écran d'accueil) |
+| Interface uniquement en français | chaînes en dur | `i18n.ts` : anglais canonique, français en table, réglage dans les préférences |
+| Messages de progression de l'export en français, même en anglais | texte libre produit par le moteur | le moteur ne renvoie plus que le **stade** (`queued`, `audio`, `mux`, `video`, `done`), l'interface le traduit |
+
+Nettoyage au passage : 13 règles CSS mortes supprimées (`.splash-word`,
+`.splash-loading`, `.empty-kicker`, `.empty-features`, `.theme-toggle`,
+`.toolbar-hint`, `.zoom-readout`, `.status-tool`, `.status-hint`, `.switch`,
+`.panel-scrim`), un `#panelScrim` jamais utilisé, et `definition.label/hint`
+retirés de `state.ts` (la copie vit dans `i18n.ts`).
+
+La hauteur de la timeline est désormais plafonnée (`min(--timeline-h, max(170px,
+46vh))`) : sur une fenêtre de 588 px de haut, la scène garde 194 px au lieu
+d'être écrasée.
 
 ## Nettoyage de la v1
 
