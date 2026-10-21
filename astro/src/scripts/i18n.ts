@@ -87,7 +87,6 @@ const STRINGS: Record<string, Entry> = {
   'transport.playTitle': { en: 'Play / pause (Space)', fr: 'Lecture / pause (Espace)' },
   'transport.end': { en: 'End', fr: 'Fin' },
   'transport.endTitle': { en: 'End (End)', fr: 'Fin (Fin)' },
-  'transport.position': { en: 'Timeline position', fr: 'Position dans la timeline' },
   'transport.snap': { en: 'Snap', fr: 'Accrochage' },
   'transport.snapTitle': { en: 'Snapping (N)', fr: 'Accrochage (N)' },
 

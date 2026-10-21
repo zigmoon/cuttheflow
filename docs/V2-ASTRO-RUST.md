@@ -132,6 +132,19 @@ La hauteur de la timeline est désormais plafonnée (`min(--timeline-h, max(170p
 46vh))`) : sur une fenêtre de 588 px de haut, la scène garde 194 px au lieu
 d'être écrasée.
 
+### Quatrième passe — la barre de transport
+
+| Symptôme | Cause | Correction |
+|---|---|---|
+| Les boutons Début / Lecture / Fin n'étaient pas centrés | la barre était un `flex` en simple file, chaque élément poussé par le suivant | grille `1fr auto 1fr` : le bloc central est centré sur la largeur de la scène, quoi qu'il arrive à gauche |
+| Le temps n'était pas au centre de la vidéo | il suivait les boutons dans le flux | il passe sous les boutons, dans le même bloc centré, avec une largeur fixe (`tabular-nums`) pour ne pas trembler |
+| La grande tirette sous la vidéo faisait doublon | la timeline sait déjà déplacer la tête de lecture : règle et zones vides d'une piste, au clic comme au glisser | `#scrub` supprimé (marquage, CSS, écouteurs, `this.scrubbing`, clé `transport.position`) |
+
+Vérifié à la règle : sur une scène de 812 px, les boutons, Play et le bloc de
+temps partagent exactement le même axe (`cx = 692`), en anglais comme en
+français, la barre n'a aucun débordement horizontal, et cliquer sur la règle
+place toujours la tête de lecture (`00:02.500` mesuré).
+
 ## Nettoyage de la v1
 
 - `js/app.js` : suppression du bloc mort `async startExport()` — 2 305 lignes,

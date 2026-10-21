@@ -1,11 +1,33 @@
-# CUT THE FLOW
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-on-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/logo-on-light.svg">
+    <img src="docs/logo-on-light.svg" width="430" alt="CUT THE FLOW">
+  </picture>
+</p>
 
-**A desktop video editor whose export is computed by ffmpeg, not by your GPU.**
+<p align="center">
+  <b>A desktop video editor whose export is computed by ffmpeg, not by your GPU.</b><br>
+  Multitrack editing in a local studio window, one deterministic render engine for<br>
+  Windows, macOS and Linux — the same project produces the same file everywhere.
+</p>
 
-Multitrack editing in a local studio window, one deterministic render engine for
-Windows, macOS and Linux — the same project produces the same file everywhere.
+<p align="center">
+  <a href="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml"><img alt="Build" src="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml/badge.svg?branch=main"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6feb?style=flat-square">
+  <img alt="Export bench" src="https://img.shields.io/badge/export%20bench-45%2F45-2ea043?style=flat-square">
+</p>
 
-![CUT THE FLOW studio](docs/screenshot.png)
+<p align="center">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-1.80%2B-b7410e?style=flat-square&logo=rust&logoColor=white">
+  <img alt="Astro" src="https://img.shields.io/badge/Astro-7-ff5d01?style=flat-square&logo=astro&logoColor=white">
+  <img alt="ffmpeg required" src="https://img.shields.io/badge/ffmpeg-required-007808?style=flat-square&logo=ffmpeg&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/license-proprietary-8957e5?style=flat-square">
+</p>
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="The CUT THE FLOW studio: media panel, preview, tools panel and multitrack timeline" width="100%">
+</p>
 
 ---
 
@@ -37,6 +59,8 @@ The measurements, not the claims: see [Verification](#verification).
 - video and audio tracks, add as many as you need
 - drag from the media panel, trim either edge, snap to clips / playhead / zero
 - split at the playhead (`S`), duplicate (`Ctrl+D`), delete (`Del`)
+- click or drag anywhere on the ruler or the empty part of a track to move the
+  playhead — there is no separate scrub bar to learn
 
 **Clips**
 - name, start, duration, source in-point, volume, fade in / out
@@ -63,6 +87,7 @@ and quality are chosen at export time; the rest of the project is untouched.
 - English by default, French in Preferences — the project is never modified
 - panel toggles, resizable timeline, zoom, fit to window
 - drop files straight from the desktop onto the window
+- the timecode sits centred under the preview, between the transport buttons
 - full keyboard map (`?`)
 
 ---
@@ -92,11 +117,11 @@ for it in `CTF_FFMPEG` / `CTF_FFPROBE`, next to the executable, then in `PATH`.
 
 ```
 $ cuttheflow doctor
-CUT THE FLOW — moteur prêt
-  interface : http://127.0.0.1:7317/
-  données   : ~/.local/share/cuttheflow
-  ffmpeg    : ffmpeg version 7.1
-  police    : /usr/share/fonts/.../DejaVuSans.ttf
+CUT THE FLOW — engine ready
+  UI     : http://127.0.0.1:7317/
+  data   : ~/.local/share/cuttheflow
+  ffmpeg : ffmpeg version 7.1
+  font   : /usr/share/fonts/.../DejaVuSans.ttf
 ```
 
 macOS builds are always signed ad-hoc (mandatory on Apple Silicon). They are
@@ -147,8 +172,9 @@ missing, the binary still builds and serves a page explaining what to run.
 | macOS Intel | `x86_64-apple-darwin` | CI (`macos-15-intel`) |
 
 macOS cannot be linked from Windows (Apple SDK): the workflow in
-`.github/workflows/build.yml` handles it, signs, optionally notarises, and
-attaches the binaries to a release when a `v*` tag is pushed.
+[`.github/workflows/build.yml`](.github/workflows/build.yml) handles it, signs,
+optionally notarises, and attaches the binaries to a release when a `v*` tag is
+pushed.
 
 ```powershell
 # Windows host: Windows + Linux static binaries, packaged in rust/dist
@@ -175,7 +201,7 @@ rust/
   scripts/verify-export.mjs   45-check export bench
   scripts/build.ps1           Windows + Linux release build
 v1/                       the browser-only editor (previous generation)
-docs/                     audit report, v2 decisions, screenshot
+docs/                     audit report, v2 decisions, screenshot, logo
 ```
 
 **The interface encodes nothing.** It sends the project to the engine and plays

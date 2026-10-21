@@ -103,7 +103,6 @@ class Editor implements TimelineHost {
   private timeline!: TimelineView;
   private activeTab: 'props' | 'fx' | 'transitions' = 'props';
   private saveTimer = 0;
-  private scrubbing = false;
   private exportTimer = 0;
   private currentJob: string | null = null;
   private engineOk = false;
@@ -286,16 +285,6 @@ class Editor implements TimelineHost {
     els.btnPlay.addEventListener('click', () => this.preview.toggle());
     els.btnStart.addEventListener('click', () => this.setTime(0));
     els.btnEnd.addEventListener('click', () => this.setTime(timelineEnd(this.project)));
-    els.scrub.addEventListener('pointerdown', () => {
-      this.scrubbing = true;
-    });
-    els.scrub.addEventListener('input', () => this.setTime(Number(els.scrub.value) * US));
-    els.scrub.addEventListener('pointerup', () => {
-      this.scrubbing = false;
-    });
-    els.scrub.addEventListener('change', () => {
-      this.scrubbing = false;
-    });
 
     els.snapToggle.addEventListener('change', () => {
       this.snapEnabled = els.snapToggle.checked;
@@ -1448,8 +1437,6 @@ class Editor implements TimelineHost {
     const end = timelineEnd(this.project);
     els.timeLabel.textContent = formatTimecode(this.timeUs);
     els.durationLabel.textContent = formatTimecode(end);
-    els.scrub.max = String(Math.max(0.001, end / US));
-    if (!this.scrubbing) els.scrub.value = String(this.timeUs / US);
     this.updateStatusBar();
   }
 
@@ -1892,7 +1879,6 @@ const els = {
   btnEnd: must<HTMLButtonElement>('btn-end'),
   timeLabel: must<HTMLElement>('timeLabel'),
   durationLabel: must<HTMLElement>('durationLabel'),
-  scrub: must<HTMLInputElement>('scrub'),
   snapToggle: must<HTMLInputElement>('snapToggle'),
   previewZoomIn: must<HTMLButtonElement>('preview-zoom-in'),
   previewZoomOut: must<HTMLButtonElement>('preview-zoom-out'),

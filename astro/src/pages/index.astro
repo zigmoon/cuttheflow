@@ -135,25 +135,36 @@ import BrandMark from '../components/BrandMark.astro';
         </div>
 
         <div class="transport">
-          <button class="transport-btn" id="btn-start" data-i18n-title="transport.startTitle" data-i18n-aria="transport.start">
-            <svg viewBox="0 0 24 24"><use href="#i-start"></use></svg>
-          </button>
-          <button class="transport-play" id="btn-play" data-i18n-title="transport.playTitle" data-i18n-aria="transport.play">
-            <svg class="play-icon" viewBox="0 0 24 24"><use href="#i-play"></use></svg>
-            <svg class="pause-icon" viewBox="0 0 24 24"><use href="#i-pause"></use></svg>
-          </button>
-          <button class="transport-btn" id="btn-end" data-i18n-title="transport.endTitle" data-i18n-aria="transport.end">
-            <svg viewBox="0 0 24 24"><use href="#i-end"></use></svg>
-          </button>
-          <span class="transport-time" id="timeLabel">00:00.000</span>
-          <span class="transport-sep" aria-hidden="true">/</span>
-          <span class="transport-duration" id="durationLabel">00:00.000</span>
-          <input id="scrub" class="scrub" type="range" min="0" max="1" step="0.001" value="0" data-i18n-aria="transport.position" />
           <label class="snap-toggle" data-i18n-title="transport.snapTitle">
             <input type="checkbox" id="snapToggle" checked />
             <svg viewBox="0 0 24 24"><use href="#i-magnet"></use></svg>
             <span data-i18n="transport.snap">Snap</span>
           </label>
+
+          <!-- Les trois boutons sont centrés sur la largeur de la scène, le
+               temps juste en dessous : plus de tirette de position, la timeline
+               fait déjà ce travail (règle et zones vides, cliquer-glisser). -->
+          <div class="transport-center">
+            <div class="transport-buttons">
+              <button class="transport-btn" id="btn-start" data-i18n-title="transport.startTitle" data-i18n-aria="transport.start">
+                <svg viewBox="0 0 24 24"><use href="#i-start"></use></svg>
+              </button>
+              <button class="transport-play" id="btn-play" data-i18n-title="transport.playTitle" data-i18n-aria="transport.play">
+                <svg class="play-icon" viewBox="0 0 24 24"><use href="#i-play"></use></svg>
+                <svg class="pause-icon" viewBox="0 0 24 24"><use href="#i-pause"></use></svg>
+              </button>
+              <button class="transport-btn" id="btn-end" data-i18n-title="transport.endTitle" data-i18n-aria="transport.end">
+                <svg viewBox="0 0 24 24"><use href="#i-end"></use></svg>
+              </button>
+            </div>
+            <div class="transport-clock">
+              <span class="transport-time" id="timeLabel">00:00.000</span>
+              <span class="transport-sep" aria-hidden="true">/</span>
+              <span class="transport-duration" id="durationLabel">00:00.000</span>
+            </div>
+          </div>
+
+          <span class="transport-side" aria-hidden="true"></span>
         </div>
       </section>
 

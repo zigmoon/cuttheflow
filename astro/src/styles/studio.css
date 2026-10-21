@@ -1030,13 +1030,38 @@ svg {
 
 .transport {
   flex: none;
-  display: flex;
+  display: grid;
+  /* Colonnes symétriques : le bloc central est centré sur la largeur de la
+     scène, quoi qu'il arrive à gauche ou à droite. */
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 8px;
-  height: 46px;
-  padding: 0 14px;
+  gap: 10px;
+  padding: 7px 14px 9px;
   border-top: 1px solid var(--line-soft);
   background: var(--bg-surface);
+}
+
+.transport-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.transport-buttons {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.transport-side {
+  min-width: 0;
+}
+
+.transport-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
 }
 
 .transport-btn,
@@ -1106,6 +1131,7 @@ svg {
 .transport-time {
   color: var(--text);
   min-width: 74px;
+  text-align: right;
 }
 
 .transport-duration {
@@ -1119,17 +1145,9 @@ svg {
   font-size: 11px;
 }
 
-.scrub {
-  flex: 1;
-  min-width: 60px;
-  height: 18px;
-  margin: 0 4px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
 .snap-toggle {
   display: inline-flex;
+  justify-self: start;
   align-items: center;
   gap: 5px;
   padding: 5px 8px;

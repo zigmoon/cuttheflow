@@ -52,7 +52,7 @@ const MEDIA = path.resolve(
         path.join(repo, 'v1', 'tools', 'regression', 'media'),
         path.join(repo, 'tools', 'regression', 'media'),
       ];
-      return candidates.find((dir) => existsSync(dir)) ?? candidates[1];
+      return candidates.find((dir) => existsSync(dir)) ?? candidates[0];
     })(),
   ),
 );
