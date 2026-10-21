@@ -114,6 +114,8 @@ Reproduire :
 
 ```powershell
 cd rust
+# une fois : les médias du banc (ignorés par git, générés par ffmpeg)
+powershell -ExecutionPolicy Bypass -File ..\v1\tools\regression\make-media.ps1
 node scripts/verify-export.mjs --bin .\target\release\cuttheflow.exe
 ```
 

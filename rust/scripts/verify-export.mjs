@@ -18,14 +18,14 @@
  *   • cohérence des trois formats entre eux (MP4 / WebM / MP3).
  *
  * Usage :
- *   node verify-export.mjs --bin ../target/release/cuttheflow --media ../../tools/regression/media
+ *   node verify-export.mjs --bin ../target/release/cuttheflow --media ../v1/tools/regression/media
  *   node verify-export.mjs --bin ... --quick        (MP4 seul)
  *
  * Sortie : code 0 seulement si toutes les vérifications passent.
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,7 +40,22 @@ const argValue = (name, fallback) => {
 };
 const QUICK = args.includes('--quick');
 const BIN = path.resolve(argValue('bin', path.join(SCRIPT_DIR, '..', 'target', 'release', process.platform === 'win32' ? 'cuttheflow.exe' : 'cuttheflow')));
-const MEDIA = path.resolve(argValue('media', path.join(SCRIPT_DIR, '..', '..', 'tools', 'regression', 'media')));
+// Les médias du banc v1 vivent dans `v1/tools/regression/media` depuis que
+// l'éditeur navigateur a rejoint ce dépôt ; l'ancien emplacement reste accepté
+// pour ne pas casser un clone de transition.
+const MEDIA = path.resolve(
+  argValue(
+    'media',
+    (() => {
+      const repo = path.join(SCRIPT_DIR, '..', '..');
+      const candidates = [
+        path.join(repo, 'v1', 'tools', 'regression', 'media'),
+        path.join(repo, 'tools', 'regression', 'media'),
+      ];
+      return candidates.find((dir) => existsSync(dir)) ?? candidates[1];
+    })(),
+  ),
+);
 const OUT = path.resolve(argValue('out', path.join(SCRIPT_DIR, '..', 'target', 'verify')));
 const FORMATS = QUICK ? ['mp4'] : (argValue('formats', 'mp4,webm,mp3').split(','));
 
