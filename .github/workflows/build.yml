@@ -195,6 +195,61 @@ jobs:
         if: matrix.cross == '' && runner.os != 'Linux'
         run: cargo test --release --manifest-path rust/Cargo.toml --target ${{ matrix.target }} -p ctf-core
 
+      # ── Test de fumée du binaire livré ────────────────────────────────
+      # Vérifie ce que l'utilisateur fera vraiment : la version, l'aide, et le
+      # démarrage du studio. On utilise `--web --no-open` pour ne dépendre d'aucun
+      # affichage (les runners n'ont pas d'écran, et WebKitGTK peut manquer).
+      # Ce test aurait attrapé `cuttheflow --web` qui répondait « commande
+      # inconnue » alors que le README le documente.
+      - name: Fumée — le binaire livré démarre et répond
+        if: matrix.cross == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="rust/target/${{ matrix.target }}/release/${{ matrix.bin }}"
+          chmod +x "$BIN"
+
+          echo "── --version"
+          VERSION=$("$BIN" --version)
+          echo "$VERSION"
+          [[ "$VERSION" == cuttheflow* ]] || { echo "::error::--version ne répond pas"; exit 1; }
+
+          echo "── --help"
+          HELP=$("$BIN" --help)
+          echo "$HELP" | head -20
+          for attendu in "--web" "--native" "--port"; do
+            echo "$HELP" | grep -q -- "$attendu" || { echo "::error::--help ne mentionne pas $attendu"; exit 1; }
+          done
+          if echo "$HELP" | grep -qi "le navigateur s'ouvre"; then
+            echo "::error::--help décrit encore l'ancien comportement (navigateur au lieu de la fenêtre)"; exit 1
+          fi
+
+          echo "── doctor"
+          "$BIN" doctor || echo "(ffmpeg absent sur ce runner : normal, le studio bascule en mode navigateur)"
+
+          echo "── démarrage en mode navigateur"
+          "$BIN" --web --no-open --port 7411 &
+          PID=$!
+          for i in $(seq 1 40); do
+            if curl -fsS --max-time 2 http://127.0.0.1:7411/api/health -o "$RUNNER_TEMP/health.json"; then break; fi
+            sleep 0.5
+          done
+          kill $PID 2>/dev/null || true
+          cat "$RUNNER_TEMP/health.json" || { echo "::error::le serveur n'a pas répondu"; exit 1; }
+          grep -q '"app":"cuttheflow"' "$RUNNER_TEMP/health.json" || { echo "::error::réponse /api/health inattendue"; exit 1; }
+
+          echo "── interface servie"
+          "$BIN" --web --no-open --port 7412 &
+          PID=$!
+          for i in $(seq 1 40); do
+            if curl -fsS --max-time 2 http://127.0.0.1:7412/ -o "$RUNNER_TEMP/index.html"; then break; fi
+            sleep 0.5
+          done
+          kill $PID 2>/dev/null || true
+          grep -qi "CUT THE FLOW" "$RUNNER_TEMP/index.html" || { echo "::error::l'interface embarquée n'est pas servie"; exit 1; }
+          grep -q 'service-worker' "$RUNNER_TEMP/index.html" || echo "(service worker non référencé dans index.html)"
+          echo "fumée : OK"
+
       # ── macOS : signature ──────────────────────────────────────────────
       - name: macOS — signature ad-hoc (toujours)
         if: runner.os == 'macOS'

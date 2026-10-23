@@ -35,6 +35,9 @@ fn main() -> ExitCode {
         Some("probe") => probe(&args[1..]),
         Some("export") => export_command(&args[1..]),
         Some("serve") => serve(&args[1..]),
+        // Options sans sous-commande : `cuttheflow --web`, `cuttheflow --port 7400`.
+        // C'est la forme documentée dans le README ; elle doit lancer `serve`.
+        Some(flag) if flag.starts_with('-') => serve(&args[..]),
         Some(other) => Err(format!(
             "commande inconnue « {other} »\nLancez `cuttheflow --help`."
         )),
@@ -55,15 +58,24 @@ fn print_usage() {
 
 USAGE
   cuttheflow [serve] [--port 7317] [--host 127.0.0.1] [--root <dossier>] [--no-open]
+             [--native | --web]
   cuttheflow doctor
   cuttheflow probe <média>
   cuttheflow export <projet.json> --out <sortie> [--format mp4|webm|mp3]
                     [--crf N] [--preset medium] [--keep-work]
 
-Sans commande, `serve` est lancé et le navigateur s'ouvre.
+Sans commande, `serve` démarre et le studio s'ouvre dans sa propre fenêtre
+(WebView2 sous Windows, WKWebView sous macOS, WebKitGTK sous Linux).
+  --web     ouvre le studio dans le navigateur par défaut au lieu de la fenêtre
+  --native  force la fenêtre native (défaut quand elle est compilée)
+
+Si la fenêtre native est indisponible (WebKitGTK absent, pas de session
+graphique), le studio le signale et bascule sur le navigateur.
 
 ffmpeg est cherché dans CTF_FFMPEG / CTF_FFPROBE, à côté de l'exécutable, puis
-dans le PATH. La police des clips texte suit le même ordre (CTF_FONT).",
+dans le PATH. La police des clips texte suit le même ordre (CTF_FONT).
+Sans ffmpeg le studio fonctionne quand même : tout se fait dans la vue
+embarquée (WebCodecs).",
         version = env!("CARGO_PKG_VERSION")
     );
 }

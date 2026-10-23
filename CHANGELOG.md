@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [CUT THE FLOW 2 — studio web 2.6.1 / moteur 0.9.1] - 2026-10-23
+
+### 🐛 Corrigé — `cuttheflow --web` ne démarrait pas
+
+Le README et le mode d'emploi documentent `cuttheflow --web`. Le binaire
+répondait `commande inconnue « --web »` : la première option était prise pour un
+nom de commande. Toute option commençant par `-` lance maintenant `serve`, donc
+`cuttheflow --web` et `cuttheflow --port 7400` fonctionnent comme documenté.
+
+### 🐛 Corrigé — l'aide décrivait encore l'ancien comportement
+
+`--help` annonçait « le navigateur s'ouvre » et ne mentionnait ni `--native` ni
+`--web`. Le texte décrit désormais la fenêtre native et le repli sur le
+navigateur.
+
+### 🐛 Corrigé — WebView2 salissait le dossier de téléchargement
+
+Sans répertoire explicite, le moteur écrivait son profil dans un dossier
+`cuttheflow.exe.WebView2` **à côté de l'exécutable**. Deux conséquences : le
+dossier de téléchargement se remplissait de fichiers inconnus, et le studio ne
+pouvait pas démarrer s'il était installé dans un emplacement en lecture seule
+(`C:\Program Files`). Le profil est maintenant rangé avec les autres données du
+studio (`%LOCALAPPDATA%\cuttheflow\webview`, `~/.local/share/cuttheflow/webview`).
+
+### ✅ Ajouté — test de fumée sur chaque système, en CI
+
+Chaque construction exécute désormais le binaire livré : `--version`, `--help`
+(qui doit mentionner `--web` et `--native`), `doctor`, démarrage réel du serveur,
+réponse de `/api/health` et envoi de l'interface. Ce contrôle aurait attrapé le
+bug `--web`.
+
+### 🔧 Service worker `ctf2-v10`
+
+Purge du cache pour les visiteurs déjà passés sur la PWA.
+
+---
+
 ## [CUT THE FLOW 2 — studio web 2.6.0 / moteur 0.9.0] - 2026-10-23
 
 ### ✨ Ajouté — une vraie fenêtre d'application, sans navigateur

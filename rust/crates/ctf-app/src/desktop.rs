@@ -32,7 +32,24 @@ pub fn run(url: &str) -> Result<(), String> {
         .build(&event_loop)
         .map_err(|e| format!("fenêtre impossible : {e}"))?;
 
-    let builder = WebViewBuilder::new().with_url(url).with_devtools(cfg!(debug_assertions));
+    // Sans répertoire explicite, WebView2 écrit son profil dans un dossier
+    // `cuttheflow.exe.WebView2` à côté de l'exécutable : le dossier de
+    // téléchargement se salit, et l'application échoue si elle est installée
+    // dans un emplacement en lecture seule (Program Files). On range donc le
+    // profil avec les autres données du studio, là où les droits existent.
+    let profile = crate::server::default_root().join("webview");
+    if let Err(error) = std::fs::create_dir_all(&profile) {
+        eprintln!("  ⚠ profil WebView dans le dossier temporaire ({error})");
+    }
+    let profile = if profile.is_dir() {
+        Some(profile)
+    } else {
+        None
+    };
+    let mut context = wry::WebContext::new(profile);
+    let builder = WebViewBuilder::new_with_web_context(&mut context)
+        .with_url(url)
+        .with_devtools(cfg!(debug_assertions));
 
     // Linux : le WebView est un widget GTK qu'il faut poser dans la fenêtre.
     #[cfg(any(
@@ -64,6 +81,11 @@ pub fn run(url: &str) -> Result<(), String> {
 
     // La WebView doit survivre à la boucle : on la garde vivante jusqu'à la fin.
     let _webview = webview;
+
+    // Preuve que la fenêtre existe vraiment : la CI et les utilisateurs lisent
+    // cette ligne. Elle n'apparaît qu'après la création réussie du WebView.
+    println!("  fenêtre   : ouverte — {TITLE}");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
