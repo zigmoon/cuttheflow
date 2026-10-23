@@ -41,6 +41,10 @@
   <img alt="ffmpeg" src="https://img.shields.io/badge/ffmpeg-optional-007808?logo=ffmpeg&logoColor=white">
 </p>
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="The CUT THE FLOW studio: media panel, preview, tools panel and multitrack timeline" width="100%">
+</p>
+
 > **How it runs.** CUT THE FLOW is a local studio: the executable ships the
 > render engine *and* serves the interface from `127.0.0.1`, then shows it in
 > **its own application window** — WebView2 on Windows 10/11, WKWebView on
@@ -49,10 +53,6 @@
 > which is what makes one binary enough for three systems. `--web` opens the
 > studio in your default browser instead, and a machine without a usable system
 > WebView falls back to it automatically — announced, never silent.
-
-<p align="center">
-  <img src="docs/screenshot.png" alt="The CUT THE FLOW studio: media panel, preview, tools panel and multitrack timeline" width="100%">
-</p>
 
 ---
 
