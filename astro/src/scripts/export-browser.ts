@@ -105,7 +105,8 @@ async function pickVideoConfig(
     }
   }
   throw new Error(
-    `Aucun encodeur vidéo utilisable (${format.toUpperCase()}) dans ce navigateur. Utilisez Chrome ou Edge à jour.`,
+    `Aucun encodeur vidéo utilisable (${format.toUpperCase()}) dans ce moteur de rendu. ` +
+      'Installez ffmpeg pour encoder avec le moteur natif.',
   );
 }
 

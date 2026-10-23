@@ -370,20 +370,20 @@ const STRINGS: Record<string, Entry> = {
     fr: 'Mixage ffmpeg en PCM flottant, encodage LAME. Le résultat est identique sur toutes les machines.',
   },
   'export.hintVideoBrowser': {
-    en: 'Encoded in this browser (WebCodecs), frame by frame: 48 kHz audio, same result on every machine running this browser.',
-    fr: 'Encodé dans ce navigateur (WebCodecs), image par image : audio 48 kHz, même résultat sur toute machine équipée de ce navigateur.',
+    en: 'Encoded frame by frame (WebCodecs): 48 kHz audio, same result on every machine running this rendering engine.',
+    fr: 'Encodé image par image (WebCodecs) : audio 48 kHz, même résultat sur toute machine équipée de ce moteur de rendu.',
   },
   'export.hintAudioBrowser': {
-    en: 'Mixed and encoded in this browser (LAME), 48 kHz stereo.',
-    fr: 'Mixé et encodé dans ce navigateur (LAME), stéréo 48 kHz.',
+    en: 'Mixed and encoded on the spot (LAME), 48 kHz stereo.',
+    fr: 'Mixé et encodé sur place (LAME), stéréo 48 kHz.',
   },
   'export.hintEngineFallback': {
-    en: 'This project uses keyframes, masks or speed changes: it will be rendered in the browser (WebCodecs), because the native engine does not handle them yet.',
-    fr: 'Ce projet utilise des keyframes, des masques ou une vitesse modifiée : il sera rendu dans le navigateur (WebCodecs), le moteur natif ne les gère pas encore.',
+    en: 'This project uses keyframes, masks or speed changes: it is rendered by the WebCodecs engine, because the native engine does not handle them yet.',
+    fr: 'Ce projet utilise des keyframes, des masques ou une vitesse modifiée : il est rendu par le moteur WebCodecs, le moteur natif ne les gère pas encore.',
   },
   'export.audioSkipped': {
-    en: '⚠︎ {n} audio track(s) could not be decoded by this browser: the video is exported without them. Chrome/Edge handle AAC natively; a Chromium build without proprietary codecs cannot.',
-    fr: '⚠︎ {n} piste(s) audio non décodée(s) par ce navigateur : la vidéo est exportée sans elles. Chrome/Edge décodent l’AAC nativement ; une compilation Chromium sans codecs propriétaires en est incapable.',
+    en: '⚠︎ {n} audio track(s) could not be decoded here: the video is exported without them. AAC decoding needs a build with proprietary codecs; ffmpeg handles it on every machine.',
+    fr: '⚠︎ {n} piste(s) audio non décodée(s) ici : la vidéo est exportée sans elles. Le décodage AAC exige une compilation avec codecs propriétaires ; ffmpeg le fait sur toutes les machines.',
   },
   'export.sending': { en: 'Sending the timeline…', fr: 'Envoi de la timeline…' },
   'export.preparing': { en: 'Preparing…', fr: 'Préparation…' },
@@ -404,8 +404,8 @@ const STRINGS: Record<string, Entry> = {
   'export.cancelFailed': { en: 'Could not cancel: {error}', fr: 'Annulation impossible : {error}' },
   'export.noAudio': { en: 'no audio', fr: 'sans audio' },
   'export.encoderUnsupported': {
-    en: 'This browser cannot encode {format} at {width}×{height}. Choose a lower resolution, or WebM (VP9) which often handles 4K where H.264 does not.',
-    fr: 'Ce navigateur ne sait pas encoder le {format} en {width}×{height}. Choisissez une résolution inférieure, ou WebM (VP9), qui gère souvent la 4K là où le H.264 échoue.',
+    en: 'This engine cannot encode {format} at {width}×{height}. Choose a lower resolution, or WebM (VP9) which often handles 4K where H.264 does not.',
+    fr: 'Ce moteur ne sait pas encoder le {format} en {width}×{height}. Choisissez une résolution inférieure, ou WebM (VP9), qui gère souvent la 4K là où le H.264 échoue.',
   },
   'export.size': { en: '{n} MB', fr: '{n} Mo' },
   'export.detailsAudio': { en: '{size} · {time} · 48 kHz stereo', fr: '{size} · {time} · 48 kHz stéréo' },
@@ -442,23 +442,40 @@ const STRINGS: Record<string, Entry> = {
     en: 'Normal for the online studio: import and export run in this browser (WebCodecs). Nothing to install — keep the tab open while exporting.',
     fr: 'Normal pour le studio en ligne : l’import et l’export se font dans ce navigateur (WebCodecs). Rien à installer — gardez l’onglet ouvert pendant l’export.',
   },
+  // Même état (pas de ffmpeg) mais dans l'application : le studio encode dans sa
+  // propre vue embarquée. Parler de « navigateur » et d'« onglet » y serait faux,
+  // et conseiller Chrome n'aurait aucun sens : la solution est d'installer ffmpeg.
+  'engine.localApp': { en: 'no ffmpeg', fr: 'sans ffmpeg' },
+  'engine.localAppTitle': {
+    en: 'ffmpeg not found: encoding runs in the embedded view (WebCodecs). Install ffmpeg to use the native engine — identical files on every machine.',
+    fr: 'ffmpeg introuvable : l’encodage se fait dans la vue embarquée (WebCodecs). Installez ffmpeg pour utiliser le moteur natif — fichiers identiques sur toutes les machines.',
+  },
   'engine.lostTitle': {
     en: 'The Rust engine stopped responding. Restart it (`cuttheflow serve`) then reload this page.',
     fr: 'Le moteur Rust ne répond plus. Relancez-le (`cuttheflow serve`) puis rechargez cette page.',
   },
-  'export.browserHint': {
-    en: 'Encoding happens in your browser — keep this tab open until it finishes.',
-    fr: 'L’encodage se fait dans votre navigateur — gardez cet onglet ouvert jusqu’à la fin.',
+  'engine.lostTitleApp': {
+    en: 'The engine stopped responding. Quit CUT THE FLOW and start it again.',
+    fr: 'Le moteur ne répond plus. Quittez CUT THE FLOW et relancez-le.',
   },
   'export.browserStart': { en: 'Encoding in the browser…', fr: 'Encodage dans le navigateur…' },
+  'export.browserStartApp': { en: 'Encoding in the embedded view…', fr: 'Encodage dans la vue embarquée…' },
   'export.browserUnsupported': {
     en: 'This browser cannot encode {format}. Use a recent Chrome, Edge or Firefox.',
     fr: 'Ce navigateur ne sait pas encoder en {format}. Utilisez un Chrome, Edge ou Firefox récent.',
+  },
+  'export.encoderUnavailableApp': {
+    en: 'ffmpeg not found, and this build cannot encode {format} by itself. Install ffmpeg (winget install Gyan.FFmpeg / brew install ffmpeg / apt install ffmpeg), then quit and restart CUT THE FLOW.',
+    fr: 'ffmpeg introuvable, et cette compilation ne sait pas encoder en {format} par elle-même. Installez ffmpeg (winget install Gyan.FFmpeg / brew install ffmpeg / apt install ffmpeg), puis quittez et relancez CUT THE FLOW.',
   },
   'engine.fontOk': { en: 'font OK', fr: 'police OK' },
   'prefs.engineOff': {
     en: 'Rust engine unreachable — run `cuttheflow serve`.',
     fr: 'Moteur Rust injoignable — lancez `cuttheflow serve`.',
+  },
+  'prefs.engineOffApp': {
+    en: 'ffmpeg not found — encoding runs in the embedded view. Install ffmpeg to enable the native engine.',
+    fr: 'ffmpeg introuvable — l’encodage se fait dans la vue embarquée. Installez ffmpeg pour activer le moteur natif.',
   },
 
   // ── Aide ─────────────────────────────────────────────────────────────
@@ -611,13 +628,34 @@ function interpolate(text: string, vars?: Record<string, string | number>): stri
 }
 
 /**
+ * Raccourcis affichés selon la plateforme.
+ *
+ * Le gestionnaire de clavier accepte les deux (`ctrlKey || metaKey`), donc les
+ * deux fonctionnent. Mais un utilisateur Mac cherche ⌘, jamais « Ctrl » : l'aide
+ * et les infobulles doivent parler la langue de son clavier.
+ */
+const MAC = (() => {
+  try {
+    const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+    return /mac/i.test(nav.userAgentData?.platform || nav.platform || '');
+  } catch {
+    return false;
+  }
+})();
+
+export function platformKeys(text: string): string {
+  if (!MAC) return text;
+  return text.replace(/\bCtrl\b/g, '⌘').replace(/\bShift\b/g, '⇧').replace(/\bMaj\b/g, '⇧');
+}
+
+/**
  * Traduit une clé. Une clé inconnue est renvoyée telle quelle : en développement
  * on voit immédiatement le manque, en production rien ne casse.
  */
 export function t(key: string, vars?: Record<string, string | number>): string {
   const entry = STRINGS[key];
   if (!entry) return key;
-  return interpolate(entry[current] || entry.en, vars);
+  return platformKeys(interpolate(entry[current] || entry.en, vars));
 }
 
 /** Applique les traductions au balisage statique. */

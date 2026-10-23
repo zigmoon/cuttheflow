@@ -8,7 +8,7 @@
 
 import * as api from './api';
 import { exportInBrowser, type BrowserExportResult } from './export-browser';
-import { applyStatic, getLang, readStoredLang, setLang, t, type Lang } from './i18n';
+import { applyStatic, getLang, platformKeys, readStoredLang, setLang, t, type Lang } from './i18n';
 import { Preview } from './preview';
 import { TimelineView, type TimelineHost } from './timeline';
 import { APP_VERSION } from './version';
@@ -771,7 +771,7 @@ class Editor implements TimelineHost {
   private openPreferences(): void {
     els.prefsEngine.textContent = this.engineOk
       ? t('prefs.engine', { info: this.engineSummary() })
-      : t('prefs.engineOff');
+      : t(this.inApp ? 'prefs.engineOffApp' : 'prefs.engineOff');
     // La version affichée est celle du bundle compilé ; celle du moteur vient de
     // `/api/health`. En mode statique il n'y a pas de moteur, donc pas de ligne.
     const engine = this.engineOk && this.engineVersion ? ` · ${t('prefs.engineVersion')} ${this.engineVersion}` : '';
@@ -788,6 +788,19 @@ class Editor implements TimelineHost {
   }
 
   // ── Moteur ──────────────────────────────────────────────────────────
+
+  /**
+   * Vrai quand l'interface est servie par le binaire (application de bureau).
+   *
+   * Le serveur répond toujours avec sa version, même sans ffmpeg ; en
+   * hébergement statique `/api/health` renvoie 404 et la version reste vide.
+   * C'est ce qui permet de parler correctement à l'utilisateur : dans
+   * l'application il n'y a ni onglet ni navigateur à changer, et la solution au
+   * manque de ffmpeg est de l'installer.
+   */
+  private get inApp(): boolean {
+    return this.engineVersion !== '';
+  }
 
   /**
    * Détecte le mode. Sans moteur, l'application reste pleinement utilisable :
@@ -832,15 +845,15 @@ class Editor implements TimelineHost {
     // ligne, le studio est pleinement utilisable — et alarmant pour rien.
     if (this.mode === 'local') {
       badge.dataset.state = 'browser';
-      els.engineLabel.textContent = t('engine.local');
-      badge.title = t('engine.localTitle');
+      els.engineLabel.textContent = t(this.inApp ? 'engine.localApp' : 'engine.local');
+      badge.title = t(this.inApp ? 'engine.localAppTitle' : 'engine.localTitle');
       return;
     }
     // Ici un moteur était attendu : son absence est une vraie panne.
     if (!this.engineOk) {
       badge.dataset.state = 'bad';
       els.engineLabel.textContent = t('engine.off');
-      badge.title = t('engine.lostTitle');
+      badge.title = t(this.inApp ? 'engine.lostTitleApp' : 'engine.lostTitle');
       return;
     }
     badge.dataset.state = 'ok';
@@ -2104,9 +2117,8 @@ class Editor implements TimelineHost {
 
   private renderShortcuts(): void {
     els.shortcutGrid.innerHTML = SHORTCUTS.map(
-      ([keys, key]) => `
-        <div class="shortcut-row"><span>${escapeHtml(t(key))}</span><kbd>${escapeHtml(keys)}</kbd></div>
-      `,
+      ([keys, key]) =>
+        `<div class="shortcut-row"><span>${escapeHtml(t(key))}</span><kbd>${escapeHtml(platformKeys(keys))}</kbd></div>`,
     ).join('');
   }
 
@@ -2458,11 +2470,17 @@ class Editor implements TimelineHost {
   /** Export sans moteur : rendu + encodage WebCodecs dans l'onglet courant. */
   private async startBrowserExport(project: Project): Promise<void> {
     if (typeof VideoEncoder === 'undefined') {
-      this.exportFailed(t('export.browserUnsupported', { format: project.export.format.toUpperCase() }));
+      // Dans l'application, conseiller « utilisez Chrome » n'aurait aucun sens :
+      // la vraie solution est d'installer ffmpeg.
+      this.exportFailed(
+        t(this.inApp ? 'export.encoderUnavailableApp' : 'export.browserUnsupported', {
+          format: project.export.format.toUpperCase(),
+        }),
+      );
       return;
     }
     this.browserExport = new AbortController();
-    els.exportStage.textContent = t('export.browserStart');
+    els.exportStage.textContent = t(this.inApp ? 'export.browserStartApp' : 'export.browserStart');
     const started = performance.now();
     try {
       const result = await exportInBrowser({

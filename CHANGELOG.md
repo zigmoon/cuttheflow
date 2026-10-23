@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [CUT THE FLOW 2 — studio web 2.6.2 / moteur 0.9.1] - 2026-10-23
+
+### 🎨 Modifié — l'interface ne parle plus de « navigateur » dans l'application
+
+Dans une application de bureau, dire « gardez cet onglet ouvert » ou « utilisez
+un Chrome récent » n'a aucun sens. Pire, c'était le conseil donné quand
+l'encodage échouait : impossible à suivre dans une app.
+
+Le studio distingue maintenant les deux situations (`/api/health` répond = on est
+dans l'application ; 404 = hébergement statique) :
+
+| Situation | Avant | Maintenant |
+|---|---|---|
+| Pastille, app sans ffmpeg | « dans le navigateur » | « sans ffmpeg » |
+| Encodage impossible, dans l'app | « Utilisez Chrome, Edge ou Firefox » | « Installez ffmpeg …, puis relancez CUT THE FLOW » |
+| Moteur perdu, dans l'app | « Relancez `cuttheflow serve` » | « Quittez CUT THE FLOW et relancez-le » |
+| Textes d'export | « dans ce navigateur », « gardez l'onglet » | « image par image (WebCodecs) », « sur place » |
+
+Le web garde ses messages d'origine, qui y sont exacts.
+
+### 🎨 Modifié — les raccourcis s'affichent avec ⌘ sur macOS
+
+Le gestionnaire de clavier acceptait déjà les deux (`ctrlKey || metaKey`), mais
+l'aide et toutes les infobulles affichaient « Ctrl ». Sur Mac elles affichent
+maintenant ⌘ et ⇧, comme le clavier de l'utilisateur : `⌘ + Z`, `⌘ + ⇧ + Z`,
+`⇧ + ← / →`. Vérifié en simulant une plateforme `MacIntel`.
+
+### 🔧 Corrigé — message d'erreur d'encodeur
+
+`export-browser.ts` conseillait « Utilisez Chrome ou Edge à jour » en dur, hors
+traduction. Le message est neutre et propose la vraie solution : installer
+ffmpeg.
+
+### 🔧 Service worker `ctf2-v11`
+
+Purge du cache pour les visiteurs déjà passés sur la PWA.
+
+---
+
 ## [CUT THE FLOW 2 — studio web 2.6.1 / moteur 0.9.1] - 2026-10-23
 
 ### 🐛 Corrigé — `cuttheflow --web` ne démarrait pas
