@@ -8,9 +8,17 @@
 
 <p align="center">
   <b>A desktop video editor whose export is computed by ffmpeg, not by your GPU.</b><br>
-  Multitrack editing in a local studio window, one deterministic render engine for<br>
+  Multitrack editing in its own window, one deterministic render engine for<br>
   Windows, macOS and Linux — the same project produces the same file everywhere.
 </p>
+
+> **How it runs.** CUT THE FLOW is a local studio: the executable ships the
+> render engine *and* serves the interface from `127.0.0.1`, then opens it in a
+> dedicated window (Chrome / Edge / Brave app mode — no tabs, no address bar).
+> Nothing leaves your machine. There is no Electron or Qt shell: the UI is web,
+> which is what makes one binary enough for three systems. If no Chromium-based
+> browser is installed, the studio opens in your default browser instead — same
+> thing, with tabs.
 
 <!-- Les liens de téléchargement pointent sur la release « latest », reconstruite
      à chaque poussée sur main. Ils ne changent jamais. -->
@@ -65,8 +73,15 @@ Extract the archive, then:
 | macOS | `demarrer.command` | `bash demarrer.command` |
 | Linux | `demarrer.sh` | `bash demarrer.sh` |
 
-The studio opens on <http://127.0.0.1:7317/>. Everything stays on your machine:
-the server listens on `127.0.0.1` only and refuses other origins.
+The studio opens **in its own window** — app mode of Chrome / Edge / Brave /
+Chromium, so no tabs and no address bar. Without a Chromium-based browser it
+falls back to your default browser. Either way it is served from
+<http://127.0.0.1:7317/>: the server listens on `127.0.0.1` only, refuses other
+origins, and nothing leaves your machine.
+
+To get a real launcher icon and a window that never shows browser chrome, use
+**Install CUT THE FLOW** in the browser menu (Chrome / Edge): the studio is a
+PWA and installs itself.
 
 > **macOS first launch.** Builds are ad-hoc signed (mandatory on Apple Silicon).
 > If you download the bare binary instead of the archive, Gatekeeper may block

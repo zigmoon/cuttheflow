@@ -23,6 +23,7 @@ chmod +x ./cuttheflow 2>/dev/null || true
 
 echo
 echo "  CUT THE FLOW - démarrage du studio..."
+echo "  Une fenêtre dédiée va s'ouvrir (mode application, sans onglets)."
 echo "  Laissez ce terminal ouvert pendant le montage ; Ctrl+C pour arrêter."
 echo
 

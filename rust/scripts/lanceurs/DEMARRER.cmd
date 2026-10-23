@@ -26,7 +26,8 @@ if not exist "libunwind.dll" (
 
 echo.
 echo   CUT THE FLOW - demarrage du studio...
-echo   Laissez cette fenetre ouverte pendant le montage.
+echo   Une fenetre dediee va s'ouvrir (mode application, sans onglets).
+echo   Laissez cette fenetre noire ouverte pendant le montage.
 echo   Fermez-la pour arreter le studio.
 echo.
 

@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [CUT THE FLOW 2 — studio web 2.5.1 / moteur 0.8.0] - 2026-10-23
+
+### 🐛 Corrigé — le studio s'ouvrait dans un onglet de navigateur
+
+Double-clic sur l'exécutable → le studio apparaissait dans le navigateur par
+défaut, avec onglets et barre d'adresse. Ce n'était pas une fenêtre
+d'application, alors que le README parlait d'un « studio window ».
+
+Cause : `open_browser()` appelait `cmd /C start "" <url>` (Windows),
+`open` (macOS) ou `xdg-open` (Linux) — c'est-à-dire le navigateur par défaut,
+sans plus.
+
+Désormais le studio s'ouvre dans une **fenêtre dédiée**, en mode application
+(`--app=<url>`) de Chrome / Edge / Brave / Chromium : ni onglets, ni barre
+d'adresse, une simple fenêtre à lui. Le binaire cherche le premier navigateur
+Chromium installé (Edge est présent sur tout Windows 10/11), et **retombe sur le
+navigateur par défaut** s'il n'en trouve aucun — auquel cas il l'annonce :
+
+```
+  fenêtre   : mode application (sans onglets ni barre d'adresse)
+```
+
+Vérifié sur le binaire packagé : une fenêtre Edge intitulée « CUT THE FLOW —
+Editing studio » s'ouvre, distincte des onglets existants.
+
+### 📝 Clarifié
+
+- La documentation dit maintenant **pourquoi** c'est une fenêtre de navigateur :
+  l'interface est une application web, l'exécutable fournit le moteur d'export
+  et la sert depuis `127.0.0.1`. Pas d'Electron ni de Qt — c'est ce qui permet
+  un seul binaire pour trois systèmes.
+- Le mode d'emploi et les trois lanceurs annoncent la fenêtre dédiée, et
+  indiquent comment aller plus loin : « Installer CUT THE FLOW » depuis le menu
+  du navigateur (le studio est une PWA, donc installable avec icône et fenêtre
+  sans chrome).
+- Moteur : `0.8.0` (changement de comportement à l'ouverture).
+
+---
+
 ## [CUT THE FLOW 2 — studio web 2.5.1] - 2026-10-23
 
 ### 🐛 Corrigé — pastille « offline » en rouge sur la version en ligne

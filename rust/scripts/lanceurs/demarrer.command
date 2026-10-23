@@ -31,6 +31,7 @@ fi
 
 echo
 echo "  CUT THE FLOW - démarrage du studio..."
+echo "  Une fenêtre dédiée va s'ouvrir (mode application, sans onglets)."
 echo "  Laissez cette fenêtre ouverte pendant le montage ; Ctrl+C pour arrêter."
 echo
 

@@ -188,7 +188,17 @@ pub fn run(ffmpeg: Option<Ffmpeg>, ffmpeg_error: Option<String>, options: Server
         println!("  police    : {}", state.font.as_ref().unwrap().display());
     }
     if options.open_browser {
-        open_browser(&url);
+        // Fenêtre dédiée d'abord : c'est ce qu'on attend d'un exécutable
+        // qu'on double-clique. Le navigateur à onglets n'est que le repli.
+        let dedicated = open_studio(&url);
+        println!(
+            "  fenêtre   : {}",
+            if dedicated {
+                "mode application (sans onglets ni barre d'adresse)"
+            } else {
+                "navigateur par défaut (aucun navigateur Chromium trouvé)"
+            }
+        );
     }
 
     for stream in listener.incoming() {
@@ -1199,7 +1209,122 @@ fn percent_decode(value: &str) -> String {
     String::from_utf8_lossy(&out).to_string()
 }
 
-fn open_browser(url: &str) {
+/// Ouvre le studio dans une **fenêtre dédiée**, sans onglets ni barre d'adresse.
+///
+/// Le studio est une interface web servie par ce binaire : il n'y a pas de
+/// boîte à outils graphique native ici, donc « l'application » est une fenêtre
+/// de navigateur en **mode application** (`--app=`). Chromium (Chrome, Edge,
+/// Brave) fournit cette fenêtre ; s'il est absent, on retombe sur le navigateur
+/// par défaut — même contenu, avec ses onglets.
+///
+/// Renvoie `true` si une fenêtre dédiée a bien été lancée.
+fn open_studio(url: &str) -> bool {
+    if let Some(exe) = chromium_executable() {
+        if launch_app_window(&exe, url) {
+            return true;
+        }
+    }
+    open_default_browser(url);
+    false
+}
+
+/// Chemin du premier navigateur Chromium trouvé, dans l'ordre de préférence.
+#[cfg(windows)]
+fn chromium_executable() -> Option<String> {
+    let mut candidates: Vec<String> = Vec::new();
+    for var in ["ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"] {
+        if let Some(base) = std::env::var_os(var) {
+            let base = PathBuf::from(base);
+            candidates.push(base.join(r"Microsoft\Edge\Application\msedge.exe").to_string_lossy().into_owned());
+            candidates.push(base.join(r"Google\Chrome\Application\chrome.exe").to_string_lossy().into_owned());
+            candidates.push(
+                base.join(r"BraveSoftware\Brave-Browser\Application\brave.exe")
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+    }
+    // Edge est présent sur toute installation Windows 10/11 : c'est le filet.
+    for name in ["msedge.exe", "chrome.exe"] {
+        candidates.push(name.to_string());
+    }
+    candidates.into_iter().find(|path| {
+        // Un nom simple est résolu par le système ; un chemin doit exister.
+        !path.contains('\\') || Path::new(path).is_file()
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn chromium_executable() -> Option<String> {
+    let mut candidates: Vec<String> = Vec::new();
+    for root in ["/Applications", "/System/Applications"] {
+        candidates.push(format!("{root}/Google Chrome.app/Contents/MacOS/Google Chrome"));
+        candidates.push(format!("{root}/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"));
+        candidates.push(format!("{root}/Brave Browser.app/Contents/MacOS/Brave Browser"));
+        candidates.push(format!("{root}/Chromium.app/Contents/MacOS/Chromium"));
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home).join("Applications");
+        candidates.push(
+            home.join("Google Chrome.app/Contents/MacOS/Google Chrome")
+                .to_string_lossy()
+                .into_owned(),
+        );
+        candidates.push(
+            home.join("Microsoft Edge.app/Contents/MacOS/Microsoft Edge")
+                .to_string_lossy()
+                .into_owned(),
+        );
+    }
+    candidates.into_iter().find(|path| Path::new(path).is_file())
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn chromium_executable() -> Option<String> {
+    for name in [
+        "google-chrome",
+        "google-chrome-stable",
+        "microsoft-edge",
+        "brave-browser",
+        "chromium",
+        "chromium-browser",
+    ] {
+        let found = std::process::Command::new(name)
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        if matches!(found, Ok(status) if status.success()) {
+            return Some(name.to_string());
+        }
+    }
+    None
+}
+
+/// Lance la fenêtre d'application. Échec immédiat = exécutable introuvable.
+#[cfg(windows)]
+fn launch_app_window(exe: &str, url: &str) -> bool {
+    let app = format!("--app={url}");
+    ctf_engine::hidden(&mut std::process::Command::new(exe))
+        .arg(app)
+        .arg("--window-size=1500,940")
+        .spawn()
+        .is_ok()
+}
+
+#[cfg(not(windows))]
+fn launch_app_window(exe: &str, url: &str) -> bool {
+    let app = format!("--app={url}");
+    std::process::Command::new(exe)
+        .arg(app)
+        .arg("--window-size=1500,940")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .is_ok()
+}
+
+fn open_default_browser(url: &str) {
     #[cfg(windows)]
     {
         let _ = ctf_engine::hidden(&mut std::process::Command::new("cmd"))

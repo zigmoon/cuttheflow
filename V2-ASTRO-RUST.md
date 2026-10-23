@@ -194,6 +194,14 @@ Les deux niveaux sont indépendants : sans secrets, le workflow publie des
 binaires exécutables, simplement non notariés. C'est le comportement demandé
 (« signature si ça marche, sinon sans »).
 
+## Version 0.8.0 — 23 octobre 2026
+
+| Changement | Détail |
+|---|---|
+| **Fenêtre dédiée** | le studio s'ouvrait dans le navigateur par défaut (`cmd /C start`, `open`, `xdg-open`). Il s'ouvre maintenant en **mode application** (`--app=`) de Chrome / Edge / Brave / Chromium : pas d'onglets, pas de barre d'adresse. Repli annoncé sur le navigateur par défaut si aucun Chromium n'est installé |
+| Documentation | le mode d'emploi explique pourquoi l'interface passe par un moteur de rendu Chromium, et comment l'installer comme PWA (icône + fenêtre sans chrome) |
+| Studio web | inchangé (2.5.1) : ce sont les binaires qui changent |
+
 ## Version 2.5.1 — 23 octobre 2026 (studio ; moteur inchangé 0.7.0)
 
 | Changement | Détail |
