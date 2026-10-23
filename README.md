@@ -12,15 +12,6 @@
   Windows, macOS and Linux — the same project produces the same file everywhere.
 </p>
 
-> **How it runs.** CUT THE FLOW is a local studio: the executable ships the
-> render engine *and* serves the interface from `127.0.0.1`, then shows it in
-> **its own application window** — WebView2 on Windows 10/11, WKWebView on
-> macOS, WebKitGTK on Linux. No tabs, no address bar, no browser to install.
-> Nothing leaves your machine. There is no Electron or Qt shell: the UI is web,
-> which is what makes one binary enough for three systems. `--web` opens the
-> studio in your default browser instead, and a machine without a usable system
-> WebView falls back to it automatically — announced, never silent.
-
 <!-- Les liens de téléchargement pointent sur la release « latest », reconstruite
      à chaque poussée sur main. Ils ne changent jamais. -->
 <p align="center">
@@ -49,6 +40,15 @@
   <img alt="Astro" src="https://img.shields.io/badge/Astro-7-ff5d01?logo=astro&logoColor=white">
   <img alt="ffmpeg" src="https://img.shields.io/badge/ffmpeg-optional-007808?logo=ffmpeg&logoColor=white">
 </p>
+
+> **How it runs.** CUT THE FLOW is a local studio: the executable ships the
+> render engine *and* serves the interface from `127.0.0.1`, then shows it in
+> **its own application window** — WebView2 on Windows 10/11, WKWebView on
+> macOS, WebKitGTK on Linux. No tabs, no address bar, no browser to install.
+> Nothing leaves your machine. There is no Electron or Qt shell: the UI is web,
+> which is what makes one binary enough for three systems. `--web` opens the
+> studio in your default browser instead, and a machine without a usable system
+> WebView falls back to it automatically — announced, never silent.
 
 <p align="center">
   <img src="docs/screenshot.png" alt="The CUT THE FLOW studio: media panel, preview, tools panel and multitrack timeline" width="100%">
