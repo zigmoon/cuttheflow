@@ -13,16 +13,18 @@
 </p>
 
 <!-- Les liens de téléchargement pointent sur la release « latest », reconstruite
-     à chaque poussée sur main. Ils ne changent jamais. -->
+     à chaque poussée sur main. Ils ne changent jamais : les fichiers gardent le
+     même nom d'une version à l'autre. -->
 <p align="center">
-  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-t%C3%A9l%C3%A9charger-2f6feb?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.zip"><img alt="Download for macOS" src="https://img.shields.io/badge/macOS-t%C3%A9l%C3%A9charger-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64-desktop.zip"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-t%C3%A9l%C3%A9charger-f0a030?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64-setup.exe"><img alt="Télécharger pour Windows" src="https://img.shields.io/badge/Windows-installateur%20.exe-2f6feb?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.dmg"><img alt="Télécharger pour macOS" src="https://img.shields.io/badge/macOS-image%20.dmg-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64-desktop.zip"><img alt="Télécharger pour Linux" src="https://img.shields.io/badge/Linux-archive%20.zip-f0a030?style=for-the-badge&logo=linux&logoColor=white"></a>
 </p>
 
 <p align="center">
-  <sub>macOS Apple Silicon or Intel · Linux x86-64 (native window or self-contained) · Linux ARM64 —
-  every archive is in the table below.</sub>
+  <sub>Windows : installateur, raccourci dans le menu Démarrer, désinstallation propre.<br>
+  macOS : image disque contenant <b>CUT THE FLOW.app</b> — glissez-la dans Applications.<br>
+  macOS Intel, Linux ARM64 et les archives portables : tableau ci-dessous.</sub>
 </p>
 
 <p align="center">
@@ -59,15 +61,17 @@
 ## Download
 
 Six native builds, published by CI on every commit: no build tools needed on
-your side.
+your side. Windows ships an installer, macOS ships a disk image with a real
+`.app`; the other targets ship archives.
 
-| System | Archive (recommended) | Bare binary |
+| System | What you get | Bare binary |
 |---|---|---|
-| Windows 10/11 x64 — **native window** | [`CUTTHEFLOW-windows-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip) | [`cuttheflow-windows-x86_64.exe`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-windows-x86_64.exe) |
-| macOS Apple Silicon — **native window** | [`CUTTHEFLOW-macos-arm64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.zip) | [`cuttheflow-macos-arm64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-arm64) |
-| macOS Intel — **native window** | [`CUTTHEFLOW-macos-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-x86_64.zip) | [`cuttheflow-macos-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-x86_64) |
-| Linux x86-64 — **native window** (WebKitGTK) | [`CUTTHEFLOW-linux-x86_64-desktop.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64-desktop.zip) | [`cuttheflow-linux-x86_64-desktop`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-x86_64-desktop) |
-| Linux x86-64 — self-contained | [`CUTTHEFLOW-linux-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64.zip) | [`cuttheflow-linux-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-x86_64) |
+| Windows 10/11 x64 | [`CUTTHEFLOW-windows-x86_64-setup.exe`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64-setup.exe) — installer, Start-menu shortcut, uninstaller | [`cuttheflow-windows-x86_64.exe`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-windows-x86_64.exe) |
+| Windows 10/11 x64 | [`CUTTHEFLOW-windows-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip) — portable, nothing installed | |
+| macOS Apple Silicon | [`CUTTHEFLOW-macos-arm64.dmg`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.dmg) — **CUT THE FLOW.app**, drag to Applications | [`cuttheflow-macos-arm64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-arm64) |
+| macOS Intel | [`CUTTHEFLOW-macos-x86_64.dmg`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-x86_64.dmg) — **CUT THE FLOW.app** | [`cuttheflow-macos-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-x86_64) |
+| Linux x86-64 — **native window** | [`CUTTHEFLOW-linux-x86_64-desktop.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64-desktop.zip) — needs WebKitGTK 4.1 | [`cuttheflow-linux-x86_64-desktop`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-x86_64-desktop) |
+| Linux x86-64 — self-contained | [`CUTTHEFLOW-linux-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64.zip) — no dependency at all | [`cuttheflow-linux-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-x86_64) |
 | Linux ARM64 — self-contained | [`CUTTHEFLOW-linux-aarch64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-aarch64.zip) | [`cuttheflow-linux-aarch64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-aarch64) |
 
 Integrity: [`SHA256SUMS.txt`](https://github.com/zigmoon/cuttheflow/releases/latest/download/SHA256SUMS.txt).
@@ -75,33 +79,25 @@ All releases: [releases](https://github.com/zigmoon/cuttheflow/releases).
 
 ### Start it
 
-Extract the archive, then:
-
-| System | Double-click | Or in a terminal |
-|---|---|---|
-| Windows | `DEMARRER.cmd` | `cuttheflow.exe` |
-| macOS | `demarrer.command` | `bash demarrer.command` |
-| Linux | `demarrer.sh` | `bash demarrer.sh` |
+| System | How |
+|---|---|
+| Windows | double-click `CUTTHEFLOW-windows-x86_64-setup.exe`, then launch **CUT THE FLOW** from the Start menu |
+| macOS | open the `.dmg`, drag **CUT THE FLOW** into *Applications*, then launch it from Launchpad |
+| Linux | extract the archive, then `bash demarrer.sh` (or run `./cuttheflow`) |
 
 The studio opens **in its own application window** — Windows uses the WebView2
 engine already present on Windows 10/11, macOS uses WKWebView, Linux uses
 WebKitGTK. There is no address bar, no tab strip, and no browser to install.
 
-Two fallbacks keep it working everywhere:
-
-- the *self-contained* Linux build (static, no dependency at all) and
-  `--web` open the studio in your default browser;
-- on Linux, the *native window* build needs WebKitGTK 4.1
-  (`sudo apt install libwebkit2gtk-4.1-0`, present by default on Ubuntu 24.04+
-  and Debian 13+).
-
 Either way it is served from <http://127.0.0.1:7317/>: the server listens on
 `127.0.0.1` only, refuses other origins, and nothing leaves your machine.
 
-> **macOS first launch.** Builds are ad-hoc signed (mandatory on Apple Silicon).
-> If you download the bare binary instead of the archive, Gatekeeper may block
-> it: the launcher clears that flag for you, or run
-> `xattr -d com.apple.quarantine cuttheflow-macos-arm64`.
+> **macOS first launch.** Builds are ad-hoc signed (mandatory on Apple Silicon),
+> but not notarised by Apple, so Gatekeeper asks once. Right-click the app →
+> **Open**, or *System Settings → Privacy & Security → Open Anyway*. The same
+> applies to the bare binary: `xattr -d com.apple.quarantine cuttheflow-macos-arm64`.
+> Only an Apple Developer ID + notarisation would remove that step; it runs
+> automatically when the Apple secrets are configured in the repository.
 
 ### ffmpeg is optional
 

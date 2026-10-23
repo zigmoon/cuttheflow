@@ -184,6 +184,58 @@ foreach ($package in $packages) {
 }
 Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
 
+# Installateur Windows : seulement s'il est compilable ici. La CI le produit
+# toujours ; en local il dépend d'Inno Setup, donc son absence n'est pas une
+# erreur — on le signale et on continue.
+$iscc = @(
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $iscc) {
+    Write-Host '  [info] Inno Setup absent : installateur Windows non produit (winget install JRSoftware.InnoSetup).'
+} else {
+    Add-Type -AssemblyName System.Drawing
+    $iconSource = Join-Path $cuttheflowRoot 'astro\public\img\icon-512.png'
+    $icon = Join-Path $env:TEMP 'cuttheflow-installer.ico'
+    $image = [System.Drawing.Image]::FromFile($iconSource)
+    $bitmap = New-Object System.Drawing.Bitmap 256, 256
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.DrawImage($image, 0, 0, 256, 256)
+    $graphics.Dispose()
+    $memory = New-Object System.IO.MemoryStream
+    $bitmap.Save($memory, [System.Drawing.Imaging.ImageFormat]::Png)
+    $png = $memory.ToArray()
+    $memory.Dispose(); $bitmap.Dispose(); $image.Dispose()
+    $stream = [System.IO.File]::Create($icon)
+    $writer = New-Object System.IO.BinaryWriter($stream)
+    $writer.Write([UInt16]0); $writer.Write([UInt16]1); $writer.Write([UInt16]1)
+    $writer.Write([Byte]0); $writer.Write([Byte]0); $writer.Write([Byte]0); $writer.Write([Byte]0)
+    $writer.Write([UInt16]1); $writer.Write([UInt16]32)
+    $writer.Write([UInt32]$png.Length); $writer.Write([UInt32]22)
+    $writer.Write($png)
+    $writer.Close()
+
+    $studioVersion = (Get-Content (Join-Path $cuttheflowRoot 'astro\package.json') -Raw | ConvertFrom-Json).version
+    & $iscc `
+        "/DStudioVersion=$studioVersion" `
+        "/DEngineVersion=$version" `
+        "/DSourceExe=$(Join-Path $dist 'cuttheflow-windows-x86_64.exe')" `
+        "/DSourceDir=$dist" `
+        "/DOutputDir=$packDir" `
+        "/DIconFile=$icon" `
+        "/DReadmeFile=$(Join-Path $dist 'LISEZ-MOI.txt')" `
+        "/DLicenseFile=$(Join-Path $dist 'LICENSE')" `
+        (Join-Path $PSScriptRoot 'installer.iss') | Out-Null
+    $setup = Join-Path $packDir 'CUTTHEFLOW-windows-x86_64-setup.exe'
+    if ($LASTEXITCODE -eq 0 -and (Test-Path $setup)) {
+        Write-Host "  CUTTHEFLOW-windows-x86_64-setup.exe  ($([math]::Round((Get-Item $setup).Length / 1MB, 2)) Mo)"
+    } else {
+        Write-Host '  [info] ISCC a échoué : installateur Windows non produit.'
+    }
+}
+
 Write-Step 'Empreintes SHA-256'
 $lines = Get-ChildItem $dist -File |
     Where-Object { $_.Name -notin @('SHA256SUMS.txt', 'LISEZ-MOI.txt', 'LICENSE') } |

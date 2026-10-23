@@ -342,6 +342,160 @@ jobs:
           Copy-Item $loader.FullName (Join-Path $env:RUNNER_TEMP 'pkg/WebView2Loader.dll') -Force
           Write-Host "WebView2Loader.dll joint (depuis $($loader.FullName))"
 
+      # ── macOS : application et image disque ───────────────────────────
+      #
+      # Un .dmg n'est pas un simple conteneur : on y met un vrai bundle .app.
+      # L'utilisateur double-clique l'image, glisse l'application dans
+      # Applications, et macOS la traite comme une application (icône, Cmd+Tab,
+      # pas de Terminal). Un binaire nu n'offrirait rien de tout cela.
+      - name: macOS — application .app et image disque .dmg
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="rust/target/${{ matrix.target }}/release/${{ matrix.bin }}"
+          STUDIO=$(node -p "require('./astro/package.json').version")
+          ENGINE=$(grep -m1 '^version' rust/Cargo.toml | cut -d'"' -f2)
+          APP="$RUNNER_TEMP/dmg/CUT THE FLOW.app"
+
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp "$BIN" "$APP/Contents/MacOS/cuttheflow"
+          chmod +x "$APP/Contents/MacOS/cuttheflow"
+          cp rust/scripts/lisez-moi-dist.txt "$RUNNER_TEMP/dmg/LISEZ-MOI.txt"
+          cp LICENSE "$RUNNER_TEMP/dmg/LICENSE"
+
+          # Icône : le PNG du studio, décliné en .icns par les outils d'Apple.
+          SRC=astro/public/img/icon-512.png
+          if [ -f "$SRC" ]; then
+            ICONSET="$RUNNER_TEMP/AppIcon.iconset"
+            mkdir -p "$ICONSET"
+            for s in 16 32 128 256 512; do
+              sips -z $s $s "$SRC" --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+              d=$((s * 2))
+              sips -z $d $d "$SRC" --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+            done
+            iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+          else
+            echo "(pas d'icône source, l'application utilisera l'icône générique)"
+          fi
+
+          cat > "$APP/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>CUT THE FLOW</string>
+            <key>CFBundleDisplayName</key><string>CUT THE FLOW</string>
+            <key>CFBundleExecutable</key><string>cuttheflow</string>
+            <key>CFBundleIdentifier</key><string>com.zigmoon.cuttheflow</string>
+            <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>${STUDIO}</string>
+            <key>CFBundleVersion</key><string>${ENGINE}</string>
+            <key>CFBundleIconFile</key><string>AppIcon</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+            <key>LSApplicationCategoryType</key><string>public.app-category.video</string>
+          </dict>
+          </plist>
+          PLIST
+
+          # Signature ad-hoc du bundle : obligatoire sur Apple Silicon, et rend
+          # l'application cohérente pour Gatekeeper.
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --verbose=2 "$APP" || true
+
+          # Raccourci vers Applications, comme toute image disque macOS.
+          ln -sfn /Applications "$RUNNER_TEMP/dmg/Applications"
+
+          hdiutil create \
+            -volname "CUT THE FLOW" \
+            -srcfolder "$RUNNER_TEMP/dmg" \
+            -ov -format UDZO \
+            "dist/CUTTHEFLOW-${{ matrix.package }}.dmg"
+          ls -l "dist/CUTTHEFLOW-${{ matrix.package }}.dmg"
+
+      # ── Windows : installateur ────────────────────────────────────────
+      #
+      # Un .exe à double-cliquer, avec raccourci dans le menu Démarrer et
+      # désinstallation propre. Le binaire nu reste publié pour ceux qui
+      # préfèrent une version portable.
+      - name: Windows — installateur .exe (Inno Setup)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Inno Setup n'est pas préinstallé : on l'installe, et si cela échoue
+          # on continue sans installateur plutôt que de casser la publication.
+          try {
+            choco install innosetup --no-progress -y | Out-Null
+          } catch {
+            Write-Host "::warning::Inno Setup indisponible, l'installateur ne sera pas produit."
+            exit 0
+          }
+          $iscc = @(
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            $found = Get-ChildItem "${env:ProgramFiles(x86)}", "$env:LOCALAPPDATA\Programs" -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($found) { $iscc = $found.FullName }
+          }
+          if (-not $iscc) {
+            Write-Host "::warning::ISCC.exe introuvable, l'installateur ne sera pas produit."
+            exit 0
+          }
+          Write-Host "ISCC : $iscc"
+
+          # Icône .ico : ICO accepte un PNG 256x256 depuis Vista. On rééchantillonne
+          # le PNG du studio pour éviter un format d'icône inattendu.
+          Add-Type -AssemblyName System.Drawing
+          $src = 'astro/public/img/icon-512.png'
+          $ico = Join-Path $env:RUNNER_TEMP 'cuttheflow.ico'
+          $image = [System.Drawing.Image]::FromFile((Resolve-Path $src))
+          $bitmap = New-Object System.Drawing.Bitmap 256, 256
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+          $graphics.DrawImage($image, 0, 0, 256, 256)
+          $graphics.Dispose()
+          $memory = New-Object System.IO.MemoryStream
+          $bitmap.Save($memory, [System.Drawing.Imaging.ImageFormat]::Png)
+          $png = $memory.ToArray()
+          $memory.Dispose(); $bitmap.Dispose(); $image.Dispose()
+
+          $stream = [System.IO.File]::Create($ico)
+          $writer = New-Object System.IO.BinaryWriter($stream)
+          $writer.Write([UInt16]0); $writer.Write([UInt16]1); $writer.Write([UInt16]1)
+          $writer.Write([Byte]0); $writer.Write([Byte]0)
+          $writer.Write([Byte]0); $writer.Write([Byte]0)
+          $writer.Write([UInt16]1); $writer.Write([UInt16]32)
+          $writer.Write([UInt32]$png.Length); $writer.Write([UInt32]22)
+          $writer.Write($png)
+          $writer.Close()
+
+          $studio = (Get-Content astro/package.json -Raw | ConvertFrom-Json).version
+          $engine = (Select-String -Path rust/Cargo.toml -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
+          $exe = Resolve-Path "rust/target/${{ matrix.target }}/release/${{ matrix.bin }}"
+          $sourceDir = Split-Path $exe -Parent
+
+          # Sans la DLL compagnes, l'application installée meurt sans un mot
+          # (0xC0000135). L'installateur embarque donc tout ce qui se trouve à
+          # côté de l'exécutable ; le script .iss les joint s'ils existent.
+          & $iscc `
+            "/DStudioVersion=$studio" `
+            "/DEngineVersion=$engine" `
+            "/DSourceExe=$exe" `
+            "/DSourceDir=$sourceDir" `
+            "/DOutputDir=$(Resolve-Path dist)" `
+            "/DIconFile=$ico" `
+            "/DReadmeFile=$(Resolve-Path 'rust/scripts/lisez-moi-dist.txt')" `
+            "/DLicenseFile=$(Resolve-Path LICENSE)" `
+            'rust/scripts/installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw "ISCC a échoué (code $LASTEXITCODE)" }
+          Get-ChildItem dist | Select-Object Name, Length
+
       - name: Archive (Linux, macOS)
         if: matrix.compress == 'zip'
         shell: bash
@@ -417,24 +571,29 @@ jobs:
             echo "Studio **${VERSION}** · moteur **${ENGINE}**"
             echo
             echo "L'interface est embarquée dans chaque exécutable : rien à installer à côté."
-            echo "Sous Windows et macOS, le studio s'ouvre dans **sa propre fenêtre** (WebView2 / WKWebView),"
-            echo "sans barre d'adresse ni onglets. **ffmpeg est optionnel** — sans lui, le studio travaille"
-            echo "dans la vue embarquée (WebCodecs) : import, montage, aperçu et export MP4 / WebM / MP3."
+            echo "**ffmpeg est optionnel** — sans lui, le studio encode dans la vue embarquée"
+            echo "(WebCodecs) : import, montage, aperçu et export MP4 / WebM / MP3."
             echo
-            echo "| Système | Archive (avec lanceur) | Binaire seul |"
-            echo "|---|---|---|"
-            echo "| Windows 10/11 x64 — fenêtre native | [CUTTHEFLOW-windows-x86_64.zip](${BASE}/CUTTHEFLOW-windows-x86_64.zip) | [cuttheflow-windows-x86_64.exe](${BASE}/cuttheflow-windows-x86_64.exe) |"
-            echo "| macOS Apple Silicon — fenêtre native | [CUTTHEFLOW-macos-arm64.zip](${BASE}/CUTTHEFLOW-macos-arm64.zip) | [cuttheflow-macos-arm64](${BASE}/cuttheflow-macos-arm64) |"
-            echo "| macOS Intel — fenêtre native | [CUTTHEFLOW-macos-x86_64.zip](${BASE}/CUTTHEFLOW-macos-x86_64.zip) | [cuttheflow-macos-x86_64](${BASE}/cuttheflow-macos-x86_64) |"
-            echo "| Linux x86-64 — fenêtre native (WebKitGTK) | [CUTTHEFLOW-linux-x86_64-desktop.zip](${BASE}/CUTTHEFLOW-linux-x86_64-desktop.zip) | [cuttheflow-linux-x86_64-desktop](${BASE}/cuttheflow-linux-x86_64-desktop) |"
-            echo "| Linux x86-64 — autonome (aucune bibliothèque) | [CUTTHEFLOW-linux-x86_64.zip](${BASE}/CUTTHEFLOW-linux-x86_64.zip) | [cuttheflow-linux-x86_64](${BASE}/cuttheflow-linux-x86_64) |"
-            echo "| Linux ARM64 — autonome | [CUTTHEFLOW-linux-aarch64.zip](${BASE}/CUTTHEFLOW-linux-aarch64.zip) | [cuttheflow-linux-aarch64](${BASE}/cuttheflow-linux-aarch64) |"
+            echo "| Système | Ce que vous téléchargez |"
+            echo "|---|---|"
+            echo "| Windows 10/11 x64 | [**Installateur .exe**](${BASE}/CUTTHEFLOW-windows-x86_64-setup.exe) — raccourci dans le menu Démarrer, désinstallation propre |"
+            echo "| Windows 10/11 x64 | [Archive portable .zip](${BASE}/CUTTHEFLOW-windows-x86_64.zip) — rien n'est installé |"
+            echo "| macOS Apple Silicon | [**Image disque .dmg**](${BASE}/CUTTHEFLOW-macos-arm64.dmg) — contient \`CUT THE FLOW.app\` |"
+            echo "| macOS Intel | [**Image disque .dmg**](${BASE}/CUTTHEFLOW-macos-x86_64.dmg) |"
+            echo "| Linux x86-64 | [Archive .zip — fenêtre native](${BASE}/CUTTHEFLOW-linux-x86_64-desktop.zip) (WebKitGTK) |"
+            echo "| Linux x86-64 | [Archive .zip — autonome](${BASE}/CUTTHEFLOW-linux-x86_64.zip) (aucune bibliothèque) |"
+            echo "| Linux ARM64 | [Archive .zip — autonome](${BASE}/CUTTHEFLOW-linux-aarch64.zip) |"
             echo
-            echo "**Démarrer** — Windows : \`DEMARRER.cmd\` · Linux : \`bash demarrer.sh\` · macOS : \`demarrer.command\`"
+            echo "**Démarrer** — Windows : double-cliquez l'installateur, puis lancez CUT THE FLOW"
+            echo "depuis le menu Démarrer. macOS : ouvrez le .dmg, glissez l'application dans"
+            echo "Applications. Linux : extrayez l'archive, puis \`bash demarrer.sh\`."
             echo
-            echo "Sous Linux, la build « autonome » ne dépend d'aucune bibliothèque : elle ouvre le studio"
-            echo "dans le navigateur par défaut (\`--web\`). La build « fenêtre native » exige WebKitGTK 4.1"
-            echo "(Ubuntu 24.04+, Debian 13+ : \`sudo apt install libwebkit2gtk-4.1-0\`)."
+            echo "Sous Linux, la build « autonome » ne dépend d'aucune bibliothèque : elle ouvre"
+            echo "le studio dans le navigateur par défaut (\`--web\`). La build « fenêtre native »"
+            echo "exige WebKitGTK 4.1 (Ubuntu 24.04+, Debian 13+)."
+            echo
+            echo "macOS : l'application est signée ad-hoc mais non notariée. Au premier"
+            echo "lancement, clic droit → **Ouvrir**."
             echo
             echo "Le studio web reste disponible : https://app.zigmoon.com/CUTTHEFLOW/"
             echo

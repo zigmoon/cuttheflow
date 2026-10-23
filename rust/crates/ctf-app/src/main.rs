@@ -18,7 +18,13 @@ use ctf_engine::{export, ExportOptions, Ffmpeg};
 use serde_json::{json, Value};
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // macOS : LaunchServices ajoute parfois `-psn_0_12345` au lancement depuis
+    // le Finder. Sans ce filtre, l'application répondrait « commande inconnue »
+    // et se fermerait aussitôt — le pire des échecs, silencieux.
+    let args: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|arg| !arg.starts_with("-psn_"))
+        .collect();
     let result = match args.first().map(String::as_str) {
         // Double-clic sur le binaire : on démarre le studio et on ouvre le
         // navigateur. C'est le comportement attendu d'une application de bureau.
