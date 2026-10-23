@@ -6,14 +6,16 @@
  * donc jamais un temps de montage.
  */
 
-import type { Clip, Media, Project, Track } from './state';
-import { t } from './i18n';
+import type { Clip, Media, Project, Track } from './state';import { t } from './i18n';
+import { waveformPeaks } from './api';
 import {
   MIN_CLIP_US,
   US,
   clamp,
   clipEnd,
+  clipSpeed,
   formatTimecode,
+  hasKeyframes,
   mediaById,
   quantize,
   timelineEnd,
@@ -31,9 +33,16 @@ export interface TimelineHost {
   afterEdit: () => void;
   /** Pendant un glissement : preview seulement (pas de reconstruction DOM). */
   duringEdit: () => void;
-  addMediaToTrack: (mediaId: string, trackId: string, startUs: number) => void;
+  addMediaToTrack: (
+    mediaId: string,
+    trackId: string | null,
+    startUs: number,
+    options?: { newTrack?: boolean },
+  ) => void;
   toggleTrackMute: (trackId: string) => void;
   setTrackVolume: (trackId: string, volume: number) => void;
+  /** Zoom molette centré sur un instant : `offsetPx` = position du curseur dans la vue. */
+  zoomTimeline: (factor: number, anchorUs: number, offsetPx: number) => void;
   toast: (message: string, kind?: 'info' | 'ok' | 'error') => void;
 }
 
@@ -48,6 +57,9 @@ export class TimelineView {
   private content: HTMLElement;
   private playhead: HTMLElement;
   private scroll: HTMLElement;
+  private scrub: HTMLElement | null;
+  private scrubFill: HTMLElement | null;
+  private scrubKnob: HTMLElement | null;
   private drag: DragState | null = null;
 
   constructor(
@@ -59,6 +71,9 @@ export class TimelineView {
       content: HTMLElement;
       playhead: HTMLElement;
       scroll: HTMLElement;
+      scrub?: HTMLElement | null;
+      scrubFill?: HTMLElement | null;
+      scrubKnob?: HTMLElement | null;
     },
   ) {
     this.host = host;
@@ -68,6 +83,9 @@ export class TimelineView {
     this.content = elements.content;
     this.playhead = elements.playhead;
     this.scroll = elements.scroll;
+    this.scrub = elements.scrub ?? null;
+    this.scrubFill = elements.scrubFill ?? null;
+    this.scrubKnob = elements.scrubKnob ?? null;
     this.bind();
     this.render();
   }
@@ -87,6 +105,7 @@ export class TimelineView {
     this.renderHeaders();
     this.renderTracks();
     this.renderPlayhead();
+    this.paintWaveforms();
   }
 
   private renderRuler(): void {
@@ -103,14 +122,17 @@ export class TimelineView {
     this.ruler.innerHTML = parts.join('');
   }
 
+  /**
+   * Intervalle des graduations, choisi parmi des pas « ronds » pour qu'un tick
+   * fasse toujours ~60 px à l'écran, du dézoom extrême (0,25 px/s) au zoom fin.
+   */
   private tickStep(): number {
-    const zoom = this.zoom;
-    if (zoom >= 320) return 0.25;
-    if (zoom >= 160) return 0.5;
-    if (zoom >= 80) return 1;
-    if (zoom >= 40) return 2;
-    if (zoom >= 20) return 5;
-    return 10;
+    const steps = [0.04, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800];
+    const target = 60;
+    for (const step of steps) {
+      if (step * this.zoom >= target) return step;
+    }
+    return steps[steps.length - 1];
   }
 
   private renderHeaders(): void {
@@ -147,7 +169,7 @@ export class TimelineView {
     const parts: string[] = [];
     for (const track of project.tracks) {
       parts.push(
-        `<div class="track-row ${track.kind}" data-track-id="${track.id}" style="height:${ROW_HEIGHT}px">`,
+        `<div class="track-row ${track.kind}" data-track-id="${track.id}" data-kind="${track.kind}" style="height:${ROW_HEIGHT}px">`,
       );
       for (const clip of track.clips) {
         parts.push(this.clipHtml(project, track, clip));
@@ -200,11 +222,40 @@ export class TimelineView {
         )}"><svg viewBox="0 0 24 24"><use href="#i-mute"></use></svg></span>`,
       );
     }
+    const speed = clipSpeed(clip);
+    if (Math.abs(speed - 1) > 0.01) {
+      badges.push(
+        `<span class="clip-badge speed" title="${escapeHtml(
+          t('badge.speed', { speed: Number(speed.toFixed(2)) }),
+        )}">${Number(speed.toFixed(2))}×</span>`,
+      );
+    }
+    if (clip.mask) {
+      badges.push(
+        `<span class="clip-badge mask" title="${escapeHtml(t('badge.mask'))}">◱</span>`,
+      );
+    }
+    if (hasKeyframes(clip)) {
+      badges.push(
+        `<span class="clip-badge kf" title="${escapeHtml(
+          t('badge.keyframes', { n: clip.keyframes?.length ?? 0 }),
+        )}">◆</span>`,
+      );
+    }
+
+    const wantsWave =
+      (clip.type === 'audio' || (clip.type === 'video' && !clip.audio_muted)) &&
+      Boolean(media?.has_audio);
 
     return `
       <div class="clip ${clip.type} ${selected}" data-clip-id="${clip.id}" data-track-id="${track.id}"
            style="left:${left}px;width:${width}px" title="${escapeHtml(label)}">
         <div class="clip-trim left"></div>
+        ${
+          wantsWave
+            ? `<canvas class="clip-wave" data-wave="${clip.id}" width="${Math.round(width)}" height="${ROW_HEIGHT - 22}"></canvas>`
+            : ''
+        }
         <div class="clip-body">
           <span class="clip-name">${escapeHtml(label)}</span>
           <span class="clip-meta">${escapeHtml(meta)}</span>
@@ -215,8 +266,84 @@ export class TimelineView {
     `;
   }
 
+  /**
+   * Dessine la forme d'onde des clips audio (pics décodés une seule fois par
+   * média, puis réutilisés à chaque redessin / zoom).
+   */
+  private paintWaveforms(): void {
+    const canvases = this.tracks.querySelectorAll<HTMLCanvasElement>('canvas[data-wave]');
+    if (!canvases.length) return;
+    for (const canvas of canvases) {
+      const clipId = canvas.dataset.wave ?? '';
+      const found = this.clipById(clipId);
+      if (!found) continue;
+      const media = mediaById(this.host.project, found.clip.media);
+      if (!media) continue;
+      const key = `${media.id}:${media.duration_us}:${canvas.width}`;
+      if (canvas.dataset.painted === key) continue;
+      void waveformPeaks(media.id).then((peaks) => {
+        if (!peaks || !peaks.length) return;
+        // Le clip a pu être supprimé ou rogné entre-temps.
+        if (!canvas.isConnected) return;
+        this.drawWave(canvas, found.clip, media, peaks);
+        canvas.dataset.painted = key;
+      });
+    }
+  }
+
+  private clipById(clipId: string): { clip: Clip } | undefined {
+    for (const track of this.host.project.tracks) {
+      const clip = track.clips.find((candidate) => candidate.id === clipId);
+      if (clip) return { clip };
+    }
+    return undefined;
+  }
+
+  private drawWave(
+    canvas: HTMLCanvasElement,
+    clip: Clip,
+    media: Media,
+    peaks: number[],
+  ): void {
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const width = canvas.width;
+    const height = canvas.height;
+    context.clearRect(0, 0, width, height);
+    const span = Math.max(1, media.duration_us);
+    const speed = clipSpeed(clip);
+    context.fillStyle = 'rgba(255,255,255,0.42)';
+    for (let x = 0; x < width; x += 1) {
+      const sourceUs = clip.source_start_us + (x / width) * clip.duration_us * speed;
+      const index = Math.min(
+        peaks.length - 1,
+        Math.max(0, Math.round((sourceUs / span) * (peaks.length - 1))),
+      );
+      const amplitude = (peaks[index] ?? 0) * (height / 2) * 0.94;
+      context.fillRect(x, height / 2 - amplitude, 1, Math.max(1, amplitude * 2));
+    }
+  }
+
   renderPlayhead(): void {
     this.playhead.style.left = `${(this.host.timeUs / US) * this.zoom}px`;
+    this.renderScrub();
+  }
+
+  /** Position de la tête de lecture sur la règle compacte (pleine durée). */
+  private renderScrub(): void {
+    if (!this.scrubFill || !this.scrubKnob) return;
+    const end = Math.max(1, timelineEnd(this.host.project));
+    const ratio = clamp(this.host.timeUs / end, 0, 1);
+    this.scrubFill.style.width = `${ratio * 100}%`;
+    this.scrubKnob.style.left = `${ratio * 100}%`;
+  }
+
+  /** Instant visé par un clic sur la règle compacte (mappé sur la durée totale). */
+  private scrubTime(event: PointerEvent): number {
+    if (!this.scrub) return 0;
+    const bounds = this.scrub.getBoundingClientRect();
+    const ratio = clamp((event.clientX - bounds.left - 12) / Math.max(1, bounds.width - 24), 0, 1);
+    return ratio * Math.max(0, timelineEnd(this.host.project));
   }
 
   updateClipElement(clip: Clip): void {
@@ -241,22 +368,47 @@ export class TimelineView {
     else if (x > left + width - 40) this.scroll.scrollLeft = x - width + 160;
   }
 
-  private timeFromEvent(event: PointerEvent | DragEvent, row?: HTMLElement): number {
+  private timeFromEvent(event: PointerEvent | DragEvent, row?: HTMLElement | null): number {
     const bounds = (row ?? this.content).getBoundingClientRect();
     return Math.max(0, (event.clientX - bounds.left) / this.zoom) * US;
   }
 
   private bind(): void {
-    this.ruler.addEventListener('pointerdown', (event) => {
-      this.host.setTime(this.timeFromEvent(event));
-      const move = (moveEvent: PointerEvent) => this.host.setTime(this.timeFromEvent(moveEvent));
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
+    // La règle et la tête de lecture partagent le même geste : cliquer ou tirer
+    // déplace le temps, y compris pendant la lecture.
+    const scrubFrom = (element: HTMLElement, compute: (event: PointerEvent) => number): void => {
+      element.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        (element.closest('.timeline-scrub') ?? element).classList.add('is-scrubbing');
+        this.host.setTime(compute(event));
+        const move = (moveEvent: PointerEvent) => this.host.setTime(compute(moveEvent));
+        const up = () => {
+          (element.closest('.timeline-scrub') ?? element).classList.remove('is-scrubbing');
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      });
+    };
+
+    scrubFrom(this.ruler, (event) => this.timeFromEvent(event));
+    scrubFrom(this.playhead, (event) => {
+      const bounds = this.content.getBoundingClientRect();
+      return Math.max(0, (event.clientX - bounds.left) / this.zoom) * US;
     });
+    if (this.scrub) {
+      scrubFrom(this.scrub, (event) => this.scrubTime(event));
+      // Bulle d'aide : l'instant visé, sans avoir à relâcher.
+      const strip = this.scrub;
+      strip.addEventListener('pointermove', (event) => {
+        const target = this.scrubTime(event);
+        strip.title = strip.classList.contains('is-scrubbing')
+          ? formatTimecode(this.host.timeUs)
+          : formatTimecode(target);
+      });
+    }
 
     this.tracks.addEventListener('pointerdown', (event) => {
       const target = event.target as HTMLElement;
@@ -316,8 +468,10 @@ export class TimelineView {
         drag.clip.start_us = Math.max(0, quantize(start));
       } else if (drag.mode === 'trim-left') {
         const mediaType = drag.clip.type === 'video' || drag.clip.type === 'audio';
+        const speed = clipSpeed(drag.clip);
+        // Rogner la gauche avance aussi dans la source, à la vitesse du clip.
         const minDelta = mediaType
-          ? Math.max(-drag.originalStart, -drag.originalSource)
+          ? Math.max(-drag.originalStart, -drag.originalSource / speed)
           : -drag.originalStart;
         const maxDelta = drag.originalDuration - MIN_CLIP_US;
         let bounded = clamp(deltaUs, minDelta, maxDelta);
@@ -327,7 +481,10 @@ export class TimelineView {
         }
         drag.clip.start_us = Math.max(0, quantize(drag.originalStart + bounded));
         drag.clip.duration_us = Math.max(MIN_CLIP_US, quantize(drag.originalDuration - bounded));
-        drag.clip.source_start_us = Math.max(0, quantize(drag.originalSource + bounded));
+        drag.clip.source_start_us = Math.max(
+          0,
+          quantize(drag.originalSource + bounded * speed),
+        );
       } else {
         let bounded = clamp(
           deltaUs,
@@ -380,31 +537,82 @@ export class TimelineView {
       if (trackId) this.host.setTrackVolume(trackId, Number(target.value) / 100);
     });
 
-    this.tracks.addEventListener('dragover', (event) => {
+    // ── Dépôt depuis le chutier ───────────────────────────────────────
+    //
+    // On écoute sur la zone défilante entière et non sur les seules pistes :
+    // lâcher sous la dernière piste doit aussi fonctionner (la piste est alors
+    // ajoutée en bas). Chaque dépôt crée sa propre piste, à la ligne survolée.
+    document.addEventListener('dragend', () => this.clearDropHints());
+
+    this.scroll.addEventListener('dragover', (event) => {
       if (!event.dataTransfer?.types.includes('application/x-ctf-media')) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'copy';
       const row = (event.target as HTMLElement).closest<HTMLElement>('.track-row');
-      this.tracks
-        .querySelectorAll('.track-row.drop')
-        .forEach((element) => element.classList.remove('drop'));
-      row?.classList.add('drop');
+      this.clearDropHints(row);
+      if (!row) return;
+      // Un dépôt depuis le chutier construit toujours sa propre piste : on
+      // l'annonce avant le relâchement, quelle que soit la ligne survolée.
+      row.classList.add('drop-new');
     });
-    this.tracks.addEventListener('dragleave', (event) => {
-      const row = (event.target as HTMLElement).closest<HTMLElement>('.track-row');
-      row?.classList.remove('drop');
+    this.scroll.addEventListener('dragleave', (event) => {
+      if (event.target === this.scroll) this.clearDropHints();
     });
-    this.tracks.addEventListener('drop', (event) => {
-      const row = (event.target as HTMLElement).closest<HTMLElement>('.track-row');
-      const trackId = row?.dataset.trackId;
+    this.scroll.addEventListener('drop', (event) => {
       const mediaId = event.dataTransfer?.getData('application/x-ctf-media');
-      if (!row || !trackId || !mediaId) return;
+      if (!mediaId) return;
       event.preventDefault();
-      row.classList.remove('drop');
-      this.host.addMediaToTrack(mediaId, trackId, this.timeFromEvent(event, row));
+      const row = (event.target as HTMLElement).closest<HTMLElement>('.track-row');
+      this.clearDropHints();
+      // L'instant est mesuré sur la ligne survolée (ou sur la règle quand on
+      // lâche dans le vide) : le clip tombe là où le curseur a été relâché.
+      this.host.addMediaToTrack(
+        mediaId,
+        row?.dataset.trackId ?? null,
+        this.timeFromEvent(event, row),
+        { newTrack: true },
+      );
     });
+
+    // ── Molette : zoom de la timeline, pas de l'interface ──────────────
+    //
+    // Ctrl/⌘ + molette (et le pincement du trackpad, que Chrome signale de la
+    // même façon) zoome la timeline autour du curseur. Sans `preventDefault`,
+    // le navigateur zoome *toute* la page et le studio devient inutilisable.
+    this.scroll.addEventListener(
+      'wheel',
+      (event) => {
+        if (event.ctrlKey || event.metaKey) {
+          event.preventDefault();
+          const contentRect = this.content.getBoundingClientRect();
+          const anchorUs = Math.max(
+            0,
+            ((event.clientX - contentRect.left) / this.zoom) * US,
+          );
+          const offsetPx = event.clientX - this.scroll.getBoundingClientRect().left;
+          this.host.zoomTimeline(Math.exp(-event.deltaY * 0.0018), anchorUs, offsetPx);
+          return;
+        }
+        // La timeline n'a qu'un axe : la molette verticale fait défiler
+        // horizontalement au lieu de ne rien faire.
+        const axis = event.deltaX !== 0 ? event.deltaX : event.deltaY;
+        if (axis !== 0) {
+          event.preventDefault();
+          this.scroll.scrollLeft += axis;
+        }
+      },
+      { passive: false },
+    );
   }
 
+  private clearDropHints(except?: HTMLElement | null): void {
+    this.tracks
+      .querySelectorAll<HTMLElement>('.track-row.drop, .track-row.drop-redirect')
+      .forEach((element) => {
+        if (element === except) return;
+        element.classList.remove('drop', 'drop-redirect');
+      });
+  }
   private snapPoints(excludeClipId: string): number[] {
     const points = [0, this.host.timeUs];
     for (const track of this.host.project.tracks) {
@@ -438,7 +646,11 @@ export class TimelineView {
   private maxDuration(clip: Clip, media: Media | undefined): number {
     if (clip.type === 'video' || clip.type === 'audio') {
       const source = media?.duration_us || clip.source_start_us + clip.duration_us;
-      return Math.max(MIN_CLIP_US, source - clip.source_start_us);
+      // La fenêtre vaut la portion de source divisée par la vitesse.
+      return Math.max(
+        MIN_CLIP_US,
+        Math.round((source - clip.source_start_us) / clipSpeed(clip)),
+      );
     }
     return 600 * US;
   }

@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/logo-on-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/logo-on-light.svg">
-    <img src="docs/logo-on-light.svg" width="430" alt="CUT THE FLOW">
+    <img src="docs/logo-on-light.svg" width="230" alt="CUT THE FLOW">
   </picture>
 </p>
 
@@ -12,17 +12,25 @@
   Windows, macOS and Linux — the same project produces the same file everywhere.
 </p>
 
+<!-- Les liens de téléchargement pointent sur la release « latest », reconstruite
+     à chaque poussée sur main. Ils ne changent jamais. -->
 <p align="center">
-  <a href="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml"><img alt="Build" src="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml/badge.svg?branch=main"></a>
-  <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6feb?style=flat-square">
-  <img alt="Export bench" src="https://img.shields.io/badge/export%20bench-45%2F45-2ea043?style=flat-square">
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-télécharger-2f6feb?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.zip"><img alt="Download for macOS" src="https://img.shields.io/badge/macOS-télécharger-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64.zip"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-télécharger-f0a030?style=for-the-badge&logo=linux&logoColor=white"></a>
 </p>
 
 <p align="center">
-  <img alt="Rust" src="https://img.shields.io/badge/Rust-1.80%2B-b7410e?style=flat-square&logo=rust&logoColor=white">
-  <img alt="Astro" src="https://img.shields.io/badge/Astro-7-ff5d01?style=flat-square&logo=astro&logoColor=white">
-  <img alt="ffmpeg required" src="https://img.shields.io/badge/ffmpeg-required-007808?style=flat-square&logo=ffmpeg&logoColor=white">
-  <img alt="License" src="https://img.shields.io/badge/license-proprietary-8957e5?style=flat-square">
+  <a href="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml"><img alt="Build" src="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml/badge.svg?branch=main"></a>
+  <img alt="Latest release" src="https://img.shields.io/github/v/release/zigmoon/cuttheflow?label=version&color=2ea043">
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6feb">
+  <img alt="License" src="https://img.shields.io/badge/license-proprietary-8957e5">
+</p>
+
+<p align="center">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-1.80%2B-b7410e?logo=rust&logoColor=white">
+  <img alt="Astro" src="https://img.shields.io/badge/Astro-7-ff5d01?logo=astro&logoColor=white">
+  <img alt="ffmpeg" src="https://img.shields.io/badge/ffmpeg-optional-007808?logo=ffmpeg&logoColor=white">
 </p>
 
 <p align="center">
@@ -31,15 +39,68 @@
 
 ---
 
+## Download
+
+Five native builds, published by CI on every commit: no build tools needed on
+your side.
+
+| System | Archive (recommended) | Bare binary |
+|---|---|---|
+| Windows 10/11 x64 | [`CUTTHEFLOW-windows-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip) | [`cuttheflow-windows-x86_64.exe`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-windows-x86_64.exe) |
+| macOS Apple Silicon | [`CUTTHEFLOW-macos-arm64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.zip) | [`cuttheflow-macos-arm64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-arm64) |
+| macOS Intel | [`CUTTHEFLOW-macos-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-x86_64.zip) | [`cuttheflow-macos-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-x86_64) |
+| Linux x86-64 | [`CUTTHEFLOW-linux-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64.zip) | [`cuttheflow-linux-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-x86_64) |
+| Linux ARM64 | [`CUTTHEFLOW-linux-aarch64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-aarch64.zip) | [`cuttheflow-linux-aarch64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-aarch64) |
+
+Integrity: [`SHA256SUMS.txt`](https://github.com/zigmoon/cuttheflow/releases/latest/download/SHA256SUMS.txt).
+All releases: [releases](https://github.com/zigmoon/cuttheflow/releases).
+
+### Start it
+
+Extract the archive, then:
+
+| System | Double-click | Or in a terminal |
+|---|---|---|
+| Windows | `DEMARRER.cmd` | `cuttheflow.exe serve --open` |
+| macOS | `demarrer.command` | `bash demarrer.command` |
+| Linux | `demarrer.sh` | `bash demarrer.sh` |
+
+The studio opens on <http://127.0.0.1:7317/>. Everything stays on your machine:
+the server listens on `127.0.0.1` only and refuses other origins.
+
+> **macOS first launch.** Builds are ad-hoc signed (mandatory on Apple Silicon).
+> If you download the bare binary instead of the archive, Gatekeeper may block
+> it: the launcher clears that flag for you, or run
+> `xattr -d com.apple.quarantine cuttheflow-macos-arm64`.
+
+### ffmpeg is optional
+
+The studio runs two ways, and picks the right one by itself:
+
+| | Without ffmpeg | With ffmpeg |
+|---|---|---|
+| Import, edit, preview | browser (IndexedDB) | engine |
+| Export MP4 / WebM / MP3 | browser (WebCodecs, LAME) | ffmpeg |
+| Identical file on every OS | depends on the browser | **yes** |
+| Long edits | bounded by the tab | frame-exact |
+
+Install it once to get the deterministic engine — `winget install Gyan.FFmpeg`
+(Windows), `brew install ffmpeg` (macOS), `apt install ffmpeg` (Linux) — or drop
+`ffmpeg` and `ffprobe` next to the executable. `cuttheflow doctor` reports what
+was found.
+
+---
+
 ## Why another editor
 
 Browser editors encode with WebCodecs. That works, until it doesn't: Safari and
-Firefox have no H.264 encoder, the realtime fallback stretches long edits, a
+Firefox have no H.264 encoder, the realtime fallback drifts on long edits, a
 background tab freezes the export, and the output depends on the machine's GPU.
 
 CUT THE FLOW keeps the pleasant part — timeline, trim, snap, effects,
-transitions, shapes, live preview — and hands the rendering to **ffmpeg**, driven
-by a Rust engine with a single, testable synchronisation model.
+transitions, shapes, keyframes, live preview — and hands the rendering to
+**ffmpeg**, driven by a Rust engine with a single, testable synchronisation
+model.
 
 | | Browser engine | This engine |
 |---|---|---|
@@ -49,84 +110,38 @@ by a Rust engine with a single, testable synchronisation model.
 | Same file on every OS | no | **yes** |
 | Verifiable output | hard | measured on every build |
 
-The measurements, not the claims: see [Verification](#verification).
-
 ---
 
 ## What it does
 
 **Timeline**
-- video and audio tracks, add as many as you need
-- drag from the media panel, trim either edge, snap to clips / playhead / zero
-- split at the playhead (`S`), duplicate (`Ctrl+D`), delete (`Del`)
-- click or drag anywhere on the ruler or the empty part of a track to move the
-  playhead — there is no separate scrub bar to learn
+- video and audio tracks, as many as you need
+- dragging from the media panel **creates a track at the drop point** and places
+  the clip exactly where you released it
+- trim either edge, snap to clips / playhead / zero
+- split, duplicate, delete; undo / redo across every edit
+- zoom 0.25 → 1024 px/s with Ctrl + wheel, centred on the cursor; `Ctrl+Shift+0`
+  frames the whole edit
+- a thin scrub rail keeps the timeline usable when the panel is collapsed
+- audio waveforms drawn on the clips
 
-**Clips**
-- name, start, duration, source in-point, volume, fade in / out
-- scale, position, rotation, opacity
-- mute the sound of a video clip without detaching it
-
-**Effects** — per clip, rendered by ffmpeg, never spilling onto the neighbour:
-blur, sharpen, vignette, grain, brightness, black and white, sepia, warm, cool,
-invert, mirror, flip, pixelate.
-
-**Transitions** — between adjacent clips on the same track: fade from background,
-or cross dissolve. A dissolve moves the window *and* the source in-point by the
-same amount, bounded by the handles that actually exist; when there are none it
-falls back to a fade instead of producing a broken join.
-
-**Shapes and text** — rectangles, rounded rectangles, ellipses and text clips,
-rasterised once and looped.
-
-**Export** — MP4 (H.264 + AAC), WebM (VP9 + Opus), MP3. Resolution, frame rate
-and quality are chosen at export time; the rest of the project is untouched.
+**Composition**
+- scale, position, rotation, opacity — with **keyframes** (linear, ease-in,
+  ease-out, ease-in-out, per key). Keyframe times are clip-local, so moving a
+  clip never shifts its animation
+- **speed** 0.25× → 4×, keeping the same portion of the source: 2× halves the
+  clip on the timeline instead of trimming it, audio included
+- **masks**: rectangle or ellipse, feathered, invertible; the mask cuts the clip
+  itself, not the layers underneath
+- fades, 13 effects (blur, shine, pixelate, mirror, glitch, VHS, duotone…),
+  fade and dissolve transitions, text and shape clips
 
 **Studio**
-- dark by default, light available, both remembered
-- English by default, French in Preferences — the project is never modified
-- panel toggles, resizable timeline, zoom, fit to window
-- drop files straight from the desktop onto the window
-- the timecode sits centred under the preview, between the transport buttons
-- full keyboard map (`?`)
-
----
-
-## Install
-
-Each release ships one self-contained binary: the interface is embedded, there is
-nothing to install beside it.
-
-| Platform | File |
-|---|---|
-| Windows 10/11 (x64) | `cuttheflow-windows-x86_64.exe` |
-| Linux x86-64 (static, musl) | `cuttheflow-linux-x86_64` |
-| Linux ARM64 (static, musl) | `cuttheflow-linux-aarch64` |
-| macOS Apple Silicon | `cuttheflow-macos-arm64` |
-| macOS Intel | `cuttheflow-macos-x86_64` |
-
-Then:
-
-```bash
-./cuttheflow                 # opens the studio on http://127.0.0.1:7317/
-```
-
-**ffmpeg is required** (it is not bundled — licence and size). The engine looks
-for it in `CTF_FFMPEG` / `CTF_FFPROBE`, next to the executable, then in `PATH`.
-`cuttheflow doctor` tells you what it found:
-
-```
-$ cuttheflow doctor
-CUT THE FLOW — engine ready
-  UI     : http://127.0.0.1:7317/
-  data   : ~/.local/share/cuttheflow
-  ffmpeg : ffmpeg version 7.1
-  font   : /usr/share/fonts/.../DejaVuSans.ttf
-```
-
-macOS builds are always signed ad-hoc (mandatory on Apple Silicon). They are
-also signed with a Developer ID and notarised when the release secrets are
-configured; otherwise the binaries run normally, simply without notarisation.
+- French and English UI, dark and light themes
+- projects are JSON; media stays local (IndexedDB in browser mode)
+- installable PWA, works offline, and tells you when a new version is ready
+- encoder pre-flight: unsupported combinations are greyed out before you wait
+  for an export that would fail
 
 ---
 
@@ -137,89 +152,49 @@ cuttheflow                       # serve + open the studio
 cuttheflow serve --port 7317 --no-open
 cuttheflow doctor                # ffmpeg, encoders, font
 cuttheflow probe film.mp4        # metadata as JSON
-cuttheflow export project.json --out edit.mp4 --format mp4 --crf 18
+cuttheflow export projet.json --out montage.mp4 --format mp4 --crf 18
 ```
+
+`serve` starts even when ffmpeg is missing: it announces browser mode instead of
+refusing to launch.
 
 ---
 
 ## Build from source
 
-Requirements: Rust 1.80+, Node 20+, ffmpeg.
+Prerequisites: Rust 1.80+, Node 20.3+.
 
 ```bash
-# interface
-cd astro
-npm ci
-npm run check        # 0 error expected
-npm run build        # → astro/dist, embedded at compile time
-
-# engine + binary
-cd ../rust
-cargo build --release -p ctf-app
+npm ci --prefix astro && npm run build --prefix astro
+cargo build --release --manifest-path rust/Cargo.toml -p ctf-app
+./rust/target/release/cuttheflow serve --open
 ```
 
-`crates/ctf-app/build.rs` reads `astro/dist` **at compile time**. If it is
-missing, the binary still builds and serves a page explaining what to run.
-
-### All three platforms
-
-| Platform | Target | Where |
-|---|---|---|
-| Windows | `x86_64-pc-windows-gnullvm` (LLVM-MinGW, no MSVC needed) | local + CI |
-| Linux x86-64 | `x86_64-unknown-linux-musl` (static) | local + CI |
-| Linux ARM64 | `aarch64-unknown-linux-musl` (static) | local + CI |
-| macOS Apple Silicon | `aarch64-apple-darwin` | CI (`macos-15`) |
-| macOS Intel | `x86_64-apple-darwin` | CI (`macos-15-intel`) |
-
-macOS cannot be linked from Windows (Apple SDK): the workflow in
-[`.github/workflows/build.yml`](.github/workflows/build.yml) handles it, signs,
-optionally notarises, and attaches the binaries to a release when a `v*` tag is
-pushed.
-
-```powershell
-# Windows host: Windows + Linux static binaries, packaged in rust/dist
-powershell -ExecutionPolicy Bypass -File rust/scripts/build.ps1
-```
+`rust/scripts/build.ps1` builds all five targets **and** the ready-to-ship
+archives (this is what the local release looks like). `.github/workflows/build.yml`
+does the same on GitHub's runners, natively on each OS, and publishes the
+release.
 
 ---
 
 ## Architecture
 
 ```
-astro/                    interface (static build, no server of its own)
-  src/pages/index.astro   markup only
-  src/styles/studio.css   design tokens, light + dark
-  src/scripts/editor.ts   state, import, panels, export, shortcuts
-  src/scripts/state.ts    model mirror of ctf-core (µs, rational fps)
-  src/scripts/preview.ts  canvas composition, approximate effects, audio
-  src/scripts/timeline.ts DOM rendering, drag, trim, playhead
-  src/scripts/i18n.ts     EN (canonical) + FR
+astro/            interface: TypeScript + Astro, compiled to static files
+  src/scripts/    state, renderer, preview, timeline, editor, export
+  public/         service worker, manifest, icons
 rust/
-  crates/ctf-core         model, probe, transition plan, filter graph (pure)
-  crates/ctf-engine       ffmpeg execution: shapes, mixdown, composition
-  crates/ctf-app          binary: CLI, local HTTP server, embedded UI
-  scripts/verify-export.mjs   45-check export bench
-  scripts/build.ps1           Windows + Linux release build
-v1/                       the browser-only editor (previous generation)
-docs/                     audit report, v2 decisions, screenshot, logo
+  crates/ctf-core     model, timeline resolver, ffprobe parsing, filter graph
+  crates/ctf-engine   ffmpeg execution: audio mix, composition, export
+  crates/ctf-app      binary: CLI + local HTTP server, embeds astro/dist
+  scripts/            build.ps1, launchers, distribution notes
+v1/               previous browser-only generation, kept for reference
 ```
 
-**The interface encodes nothing.** It sends the project to the engine and plays
-the result; that is what makes the output identical on every machine.
-
-**Audio is mixed first**, in float PCM at 48 kHz, of exactly the timeline
-duration: each clip is delayed by a sample count, then summed with
-`amix=normalize=0` over a silence bed. `apad` was tried and rejected — it
-produced 13 s or 14 s depending on the run.
-
-**Video is composed second**, one input per clip: `trim` on the source,
-`setpts=PTS+start/TB` to place it, `fps` to impose the frame rate, then `overlay`
-gated on the clip window. Placing `setpts` after `overlay` would show the wrong
-source time — that is the whole trick.
-
-**The project never carries file paths.** The server resolves each `media.id`
-through its own registry, so a forged project cannot read an arbitrary file. The
-server listens on `127.0.0.1` and refuses foreign origins.
+The interface and the engine share one model: `state.ts` and `model.rs` describe
+the same project, and the preview composites with the same placement rules the
+export uses. `astro/dist` is embedded in the binary at compile time, so a single
+file carries the whole studio.
 
 ---
 
@@ -247,62 +222,57 @@ node scripts/verify-export.mjs        # 45 ffmpeg checks
 Interface: `npm run check` → 0 error, 0 warning. Effects and transitions were
 verified on real pixels (sepia `44,39,30`; ellipse `#F0F0F2`; a 0.5 s dissolve
 reading `29,29,29` → `121,13,68` → `201,0,102`, i.e. the two sources really
-mixed).
+mixed). Static fidelity in browser export: PSNR **43.6 dB**, SSIM **0.996**.
 
 ---
 
 ## Project format
 
-JSON, times in **microseconds**, frame rate as a rational (`30000/1001`).
+A project is a single JSON file: timeline in microseconds, media referenced by
+id, export settings. It is the same structure the Rust engine reads, so a project
+written by the browser can be exported by the CLI and vice versa.
 
 ```jsonc
 {
-  "version": 1, "width": 1920, "height": 1080,
+  "version": 1,
+  "width": 1920, "height": 1080,
   "fps": { "num": 30, "den": 1 },
-  "tracks": [{ "kind": "video", "clips": [{
-    "type": "video", "start_us": 0, "duration_us": 6000000,
-    "source_start_us": 0, "volume": 1, "scale": 1, "x": 0.5, "y": 0.5,
-    "rotation": 0, "opacity": 1,
-    "effects": [{ "name": "sepia", "amount": 1 }],
-    "transition": { "kind": "dissolve", "duration_us": 500000 }
-  }]}]
+  "tracks": [{
+    "kind": "video",
+    "clips": [{
+      "type": "video", "start_us": 0, "duration_us": 3000000,
+      "source_start_us": 0, "speed": 1.0,
+      "keyframes": [{ "prop": "opacity", "time_us": 0, "value": 1, "easing": "linear" }],
+      "mask": { "kind": "ellipse", "x": 0.5, "y": 0.5, "width": 0.8, "height": 0.8 }
+    }]
+  }],
+  "export": { "format": "mp4", "crf": 18, "preset": "medium" }
 }
 ```
 
-`Project::validate` checks everything before rendering: unique ids, durations,
-fades, effect names, transition bounds, colours, media types, even dimensions.
-
 ---
 
-## Limits (v2.2)
+## Limits
 
-- No subtitles, 4K proxies or undo history yet — the model and the engine are
-  already shaped for them.
-- The preview approximates grain and pixelation; the export is exact. Effects
-  that change geometry (mirror, flip, rotation) are faithful in both.
-- ffmpeg is not bundled.
-- The local server has no authentication: it is meant for `127.0.0.1`.
+- keyframes, masks and speed are rendered by the **browser** (WebCodecs) even
+  when the engine is available: ffmpeg support for them is not there yet, and
+  the export dialog says so instead of silently producing a wrong file
+- macOS builds are signed ad-hoc; Developer ID signing and notarisation happen
+  in CI only when the Apple secrets are configured
+- Windows builds are unsigned: SmartScreen may ask for confirmation
+- 4K H.264 encoding depends on the browser; VP9 handles it more often
 
 ---
 
 ## The previous generation: `v1/`
 
-`v1/` holds the browser-only editor that came before: one `index.html`, a large
-`js/app.js`, WebCodecs-based export engines, a service worker, a PWA manifest.
-It is kept here — not somewhere else — because it is the same product, and
-because it is the reference the Rust engine was measured against.
-
-It still works and passes its own **29/29** browser bench
-(`v1/tools/regression/montage.cjs`, real Chrome + ffmpeg). During the audit that
-led to v2, its dead export path (2 305 lines) and three never-loaded engines
-were removed, and the audit report is in
-[`docs/AUDIT-COMPLET-2026-10-20.md`](docs/AUDIT-COMPLET-2026-10-20.md).
-
-Nothing in `astro/` or `rust/` imports from `v1/`: the two generations are
-independent, and v1 is not built by the release workflow.
+`v1/` is the earlier browser-only editor (single HTML page, WebCodecs and
+MediaRecorder). It is kept for reference and regression tests; it is not the
+shipped product.
 
 ---
 
 ## License
 
-Proprietary — see [LICENSE](LICENSE). © Zigmoon.
+Proprietary — see [LICENSE](LICENSE). The studio is free to use; the source is
+published for transparency.

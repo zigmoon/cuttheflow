@@ -28,6 +28,26 @@ L'interface détecte le port de développement et parle à `http://127.0.0.1:731
 Sur un autre port : `?api=http://127.0.0.1:PORT`. `?reset=1` ignore et efface la
 reprise de session locale (utile pour repartir d'un projet vierge).
 
+## Déploiement web (app.zigmoon.com/CUTTHEFLOW)
+
+`astro.config.mjs` fixe `base: '/CUTTHEFLOW'` : tous les liens produits
+(`/_astro/…`, `/img/…`, `/vendor/…`, `/manifest.webmanifest`) sont préfixés et
+fonctionnent dans un sous-dossier. `dist/` est autonome :
+
+```
+index.html  manifest.webmanifest  robots.txt  .htaccess
+_astro/     CSS + JS du studio (noms hachés)
+img/        icônes et logo
+vendor/     mp4box.all.min.js, lamejs.min.js
+```
+
+Après `npm run build`, déposez **le contenu de `dist/`** dans le dossier
+`CUTTHEFLOW` du serveur. Le `.htaccess` fourni déclare le type MIME du
+manifeste, met en cache les noms hachés et laisse le HTML non caché.
+
+Aucun PHP, aucune base, aucun binaire : tout se passe dans le navigateur.
+L'export vidéo exige WebCodecs (Chrome/Edge 94+, Firefox 130+, Safari 16.4+).
+
 ## Construction
 
 ```bash
@@ -50,9 +70,14 @@ src/pages/index.astro            structure de l'écran (aucune logique métier)
 src/styles/studio.css            design system (jetons clair/sombre + composants)
 src/scripts/editor.ts            état, import, propriétés, effets, export
 src/scripts/state.ts             modèle identique à ctf-core (µs, cadence rationnelle)
-src/scripts/preview.ts           composition canvas, effets approximés, audio
+src/scripts/render.ts            rendu d'une image (partagé aperçu / export)
+src/scripts/preview.ts           horloge, audio temps réel, sources média
 src/scripts/timeline.ts          rendu DOM, déplacement, rognage, playhead
-src/scripts/api.ts               client de l'API Rust (import, médias, jobs)
+src/scripts/api.ts               client moteur OU médias locaux (IndexedDB)
+src/scripts/local-media.ts       stockage IndexedDB, sondage et vignettes locales
+src/scripts/export-browser.ts    export WebCodecs (MP4 / WebM / MP3)
+src/scripts/webm-muxer.js        muxeur EBML repris du moteur v1 (validé ffprobe)
+public/vendor/                   mp4box.js (mux MP4) et lamejs (MP3)
 public/img/                      icônes et logo d'origine, repris tels quels de la v1
 public/manifest.webmanifest      identité d'installation (mêmes icônes que la v1)
 ```
@@ -75,8 +100,17 @@ Les icônes d'onglet et d'installation sont les fichiers d'origine, servis tels
 quels : `CUT_THE_FLOW_b.svg`, `icon-192.png`, `icon-512.png`,
 `icon-512-maskable.png`, `apple-touch-icon.png`.
 
-L'interface **n'encode rien** : elle envoie le projet au moteur, qui rend le
-fichier. C'est ce qui garantit un résultat identique sur toutes les machines.
+### Deux modes, une seule interface
+
+| Mode | Détection | Import | Export |
+|---|---|---|---|
+| **moteur** | `<base>/api/health` répond | envoyé à ffprobe | rendu par ffmpeg (identique partout) |
+| **local** | pas de moteur (site statique) | sondé par le navigateur, gardé dans IndexedDB | WebCodecs image par image (H.264/VP9, AAC/Opus, LAME) |
+
+Le mode local ne dépend d'aucune horloge temps réel : les images sont encodées
+une à une et le mixage passe par `OfflineAudioContext`, donc le fichier est
+déterministe. Le badge de la barre supérieure affiche `engine` ou `browser`.
+Un `?api=http://127.0.0.1:7317` force le mode moteur.
 
 ## Fonctionnalités
 

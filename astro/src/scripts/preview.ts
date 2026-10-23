@@ -13,15 +13,9 @@
  */
 
 import { mediaUrl } from './api';
-import type { Clip, Effect, Project } from './state';
-import {
-  activeClip,
-  clipEnd,
-  mediaById,
-  resolvePlacements,
-  timelineEnd,
-  type Placement,
-} from './state';
+import { FrameRenderer } from './render';
+import type { Clip, Project } from './state';
+import { clipSpeed, mediaById, sourceTimeAt, timelineEnd, valueAt, type Placement } from './state';
 
 const MAX_PREVIEW_WIDTH = 1440;
 const DRIFT_SECONDS = 0.18;
@@ -36,11 +30,10 @@ export class Preview {
   private ctx: CanvasRenderingContext2D;
   private callbacks: PreviewCallbacks;
   private project: Project;
-  private placements: Map<string, Placement>;
+  private renderer: FrameRenderer;
   private videos = new Map<string, HTMLVideoElement>();
   private audios = new Map<string, HTMLAudioElement>();
   private images = new Map<string, HTMLImageElement>();
-  private pixelBuffer: HTMLCanvasElement;
   private hidden: HTMLDivElement;
   private frame = 0;
   private clockStart = 0;
@@ -63,8 +56,7 @@ export class Preview {
     this.ctx = context;
     this.callbacks = callbacks;
     this.project = project;
-    this.placements = resolvePlacements(project);
-    this.pixelBuffer = document.createElement('canvas');
+    this.renderer = new FrameRenderer(project);
     this.hidden = document.createElement('div');
     this.hidden.style.cssText = 'position:fixed;width:0;height:0;overflow:hidden;left:-9999px';
     document.body.appendChild(this.hidden);
@@ -74,7 +66,7 @@ export class Preview {
 
   setProject(project: Project): void {
     this.project = project;
-    this.placements = resolvePlacements(project);
+    this.renderer.setProject(project);
     this.configureCanvas();
     this.prune();
     this.draw();
@@ -154,7 +146,6 @@ export class Preview {
     let element = this.videos.get(clip.id);
     if (!element) {
       element = document.createElement('video');
-      element.src = mediaUrl(media.id);
       element.preload = 'auto';
       element.playsInline = true;
       element.crossOrigin = 'anonymous';
@@ -163,6 +154,10 @@ export class Preview {
       this.hidden.appendChild(element);
       this.videos.set(clip.id, element);
     }
+    // L'URL peut arriver après l'élément (médias locaux restaurés depuis
+    // IndexedDB) : on la repose dès qu'elle est disponible.
+    const url = mediaUrl(media.id);
+    if (url && element.getAttribute('src') !== url) element.setAttribute('src', url);
     return element;
   }
 
@@ -172,11 +167,12 @@ export class Preview {
     let element = this.audios.get(clip.id);
     if (!element) {
       element = document.createElement('audio');
-      element.src = mediaUrl(media.id);
       element.preload = 'auto';
       this.hidden.appendChild(element);
       this.audios.set(clip.id, element);
     }
+    const url = mediaUrl(media.id);
+    if (url && element.getAttribute('src') !== url) element.setAttribute('src', url);
     return element;
   }
 
@@ -186,45 +182,21 @@ export class Preview {
     let element = this.images.get(clip.id);
     if (!element) {
       element = new Image();
-      element.src = mediaUrl(media.id);
       element.addEventListener('load', () => this.draw());
       this.images.set(clip.id, element);
     }
+    const url = mediaUrl(media.id);
+    if (url && element.getAttribute('src') !== url) element.setAttribute('src', url);
     return element;
   }
 
   private placementOf(clip: Clip): Placement {
-    return (
-      this.placements.get(clip.id) ?? {
-        start_us: clip.start_us,
-        source_start_us: clip.source_start_us,
-        duration_us: clip.duration_us,
-        fade_in_us: clip.fade_in_us,
-        dissolve_us: 0,
-      }
-    );
-  }
-
-  private localTime(clip: Clip): number {
-    return this.timeUs - this.placementOf(clip).start_us;
-  }
-
-  private visualAlpha(clip: Clip, localUs: number): number {
-    const placement = this.placementOf(clip);
-    let alpha = clip.opacity;
-    if (placement.fade_in_us > 0 && localUs < placement.fade_in_us) {
-      alpha *= Math.max(0, localUs / placement.fade_in_us);
-    }
-    if (clip.fade_out_us > 0) {
-      const remaining = placement.duration_us - localUs;
-      if (remaining < clip.fade_out_us) alpha *= Math.max(0, remaining / clip.fade_out_us);
-    }
-    return Math.min(1, Math.max(0, alpha));
+    return this.renderer.placementOf(clip);
   }
 
   private audioGain(clip: Clip, localUs: number): number {
     const placement = this.placementOf(clip);
-    let gain = clip.volume;
+    let gain = valueAt(clip, 'volume', localUs);
     if (placement.fade_in_us > 0 && localUs < placement.fade_in_us) {
       gain *= Math.max(0, localUs / placement.fade_in_us);
     }
@@ -235,248 +207,21 @@ export class Preview {
     return Math.min(1, Math.max(0, gain));
   }
 
-  /** Filtre canvas approximant la chaîne d'effets ffmpeg. */
-  private filterFor(effects: Effect[] | undefined): string {
-    if (!effects || !effects.length) return 'none';
-    const parts: string[] = [];
-    for (const effect of effects) {
-      const amount = Math.min(1, Math.max(0, effect.amount));
-      switch (effect.name) {
-        case 'blur':
-          parts.push(`blur(${(0.4 + amount * 9).toFixed(2)}px)`);
-          break;
-        case 'sharpen':
-          parts.push(`contrast(${(1 + amount * 0.35).toFixed(3)})`);
-          break;
-        case 'brightness':
-          parts.push(`brightness(${(0.55 + amount).toFixed(3)})`);
-          break;
-        case 'grayscale':
-          parts.push('grayscale(1)');
-          break;
-        case 'sepia':
-          parts.push(`sepia(${amount.toFixed(3)})`);
-          break;
-        case 'warm':
-          parts.push(`sepia(${(amount * 0.55).toFixed(3)}) saturate(${(1 + amount * 0.3).toFixed(3)})`);
-          break;
-        case 'cool':
-          parts.push(`hue-rotate(${(-amount * 24).toFixed(1)}deg) saturate(${(1 + amount * 0.15).toFixed(3)})`);
-          break;
-        case 'invert':
-          parts.push('invert(1)');
-          break;
-        default:
-          break;
-      }
-    }
-    return parts.length ? parts.join(' ') : 'none';
-  }
-
-  private hasEffect(clip: Clip, name: string): boolean {
-    return Boolean(clip.effects?.some((effect) => effect.name === name));
-  }
-
-  private drawVisual(
-    source: CanvasImageSource,
-    sourceWidth: number,
-    sourceHeight: number,
-    clip: Clip,
-    localUs: number,
-  ): void {
-    if (!sourceWidth || !sourceHeight) return;
-    const canvasWidth = this.project.width;
-    const canvasHeight = this.project.height;
-    const contain = Math.min(canvasWidth / sourceWidth, canvasHeight / sourceHeight);
-    const width = sourceWidth * contain * clip.scale;
-    const height = sourceHeight * contain * clip.scale;
-    const centerX = clip.x * canvasWidth;
-    const centerY = clip.y * canvasHeight;
-    const alpha = this.visualAlpha(clip, localUs);
-    const filter = this.filterFor(clip.effects);
-
-    const pixelate = clip.effects?.find((effect) => effect.name === 'pixelate');
-    if (pixelate) {
-      const step = 2 + Math.round(pixelate.amount * 30);
-      const smallW = Math.max(2, Math.round(width / step));
-      const smallH = Math.max(2, Math.round(height / step));
-      this.pixelBuffer.width = smallW;
-      this.pixelBuffer.height = smallH;
-      const bufferCtx = this.pixelBuffer.getContext('2d');
-      if (bufferCtx) {
-        bufferCtx.imageSmoothingEnabled = true;
-        bufferCtx.drawImage(source, 0, 0, smallW, smallH);
-        this.ctx.save();
-        this.ctx.globalAlpha = alpha;
-        this.ctx.imageSmoothingEnabled = false;
-        this.drawTransformed(clip, centerX, centerY, width, height, () => {
-          this.ctx.filter = filter;
-          this.ctx.drawImage(this.pixelBuffer, 0, 0, width, height);
-          this.ctx.filter = 'none';
-        });
-        this.ctx.restore();
-        this.drawVignette(clip, canvasWidth, canvasHeight, alpha);
-        return;
-      }
-    }
-
-    this.ctx.save();
-    this.ctx.globalAlpha = alpha;
-    this.drawTransformed(clip, centerX, centerY, width, height, () => {
-      this.ctx.filter = filter;
-      if (this.hasEffect(clip, 'mirror')) {
-        this.ctx.translate(width, 0);
-        this.ctx.scale(-1, 1);
-      }
-      if (this.hasEffect(clip, 'flip')) {
-        this.ctx.translate(0, height);
-        this.ctx.scale(1, -1);
-      }
-      try {
-        this.ctx.drawImage(source, 0, 0, width, height);
-      } catch {
-        // image/vidéo pas encore décodée
-      }
-      this.ctx.filter = 'none';
-    });
-    this.ctx.restore();
-    this.drawVignette(clip, canvasWidth, canvasHeight, alpha);
-  }
-
-  /** Applique rotation + découpe, puis peint avec l'origine au coin du clip. */
-  private drawTransformed(
-    clip: Clip,
-    centerX: number,
-    centerY: number,
-    width: number,
-    height: number,
-    paint: () => void,
-  ): void {
-    this.ctx.save();
-    this.ctx.translate(centerX, centerY);
-    if (clip.rotation) this.ctx.rotate((clip.rotation * Math.PI) / 180);
-    this.ctx.beginPath();
-    this.ctx.rect(-width / 2, -height / 2, width, height);
-    this.ctx.clip();
-    this.ctx.translate(-width / 2, -height / 2);
-    paint();
-    this.ctx.restore();
-  }
-
-  private drawVignette(clip: Clip, width: number, height: number, alpha: number): void {
-    const effect = clip.effects?.find((candidate) => candidate.name === 'vignette');
-    if (!effect) return;
-    const centerX = clip.x * width;
-    const centerY = clip.y * height;
-    const radius = Math.max(width, height) * (0.85 - effect.amount * 0.25);
-    const gradient = this.ctx.createRadialGradient(centerX, centerY, radius * 0.35, centerX, centerY, radius);
-    gradient.addColorStop(0, 'rgba(0,0,0,0)');
-    gradient.addColorStop(1, `rgba(0,0,0,${(0.35 + effect.amount * 0.5) * alpha})`);
-    const previous = this.ctx.fillStyle;
-    this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, width, height);
-    this.ctx.fillStyle = previous;
-  }
-
-  private drawText(clip: Clip, localUs: number): void {
-    const style = clip.text;
-    if (!style || !style.content) return;
-    const x = clip.x * this.project.width;
-    const y = clip.y * this.project.height;
-    this.ctx.save();
-    this.ctx.globalAlpha = this.visualAlpha(clip, localUs);
-    this.ctx.translate(x, y);
-    if (clip.rotation) this.ctx.rotate((clip.rotation * Math.PI) / 180);
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.font = `700 ${style.size * clip.scale}px "Inter", "Segoe UI", system-ui, sans-serif`;
-    const lines = style.content.split('\n');
-    const lineHeight = style.size * clip.scale * 1.15;
-    const startY = -((lines.length - 1) * lineHeight) / 2;
-    if (style.background) {
-      const widest = Math.max(...lines.map((line) => this.ctx.measureText(line).width));
-      this.ctx.fillStyle = style.background;
-      this.ctx.fillRect(
-        -widest / 2 - style.size * 0.3,
-        startY - lineHeight / 2,
-        widest + style.size * 0.6,
-        lineHeight * lines.length,
-      );
-    }
-    this.ctx.fillStyle = style.color || '#FFFFFF';
-    lines.forEach((line, index) => {
-      this.ctx.fillText(line, 0, startY + index * lineHeight);
-    });
-    this.ctx.restore();
-  }
-
-  private drawShape(clip: Clip, localUs: number): void {
-    const shape = clip.shape;
-    if (!shape) return;
-    const width = shape.width * clip.scale * this.project.width;
-    const height = shape.height * clip.scale * this.project.height;
-    const x = clip.x * this.project.width;
-    const y = clip.y * this.project.height;
-    this.ctx.save();
-    this.ctx.globalAlpha = this.visualAlpha(clip, localUs);
-    this.ctx.translate(x, y);
-    if (clip.rotation) this.ctx.rotate((clip.rotation * Math.PI) / 180);
-    this.ctx.fillStyle = shape.color;
-    this.ctx.beginPath();
-    if (shape.kind === 'ellipse') {
-      this.ctx.ellipse(0, 0, width / 2, height / 2, 0, 0, Math.PI * 2);
-    } else {
-      const radius = Math.min(shape.radius * Math.min(width, height), Math.min(width, height) / 2);
-      if (radius > 0.5) {
-        this.ctx.roundRect(-width / 2, -height / 2, width, height, radius);
-      } else {
-        this.ctx.rect(-width / 2, -height / 2, width, height);
-      }
-    }
-    this.ctx.fill();
-    this.ctx.restore();
-  }
-
+  /** Compose l'image courante : même rendu que l'export (voir `render.ts`). */
   draw(): void {
-    const ctx = this.ctx;
-    const scale = this.canvas.width / this.project.width;
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.filter = 'none';
-    ctx.fillStyle = this.project.background || '#000000';
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    ctx.scale(scale, scale);
-
-    // Dernière piste = fond, première = premier plan (même ordre que le moteur).
-    // Pendant un fondu enchaîné, DEUX clips d'une même piste sont actifs : le
-    // sortant reste dessiné, l'entrant s'affiche par-dessus en s'opacifiant.
-    for (let index = this.project.tracks.length - 1; index >= 0; index -= 1) {
-      const track = this.project.tracks[index];
-      if (!track || track.muted) continue;
-      const active = track.clips
-        .filter((clip) => this.timeUs >= clip.start_us && this.timeUs < clipEnd(clip))
-        .sort((a, b) => a.start_us - b.start_us);
-      for (const clip of active) {
-        const local = this.localTime(clip);
-        if (clip.type === 'video') {
-          const element = this.videoFor(clip);
-          if (element && element.readyState >= 2) {
-            this.drawVisual(element, element.videoWidth, element.videoHeight, clip, local);
-          }
-        } else if (clip.type === 'image') {
-          const element = this.imageFor(clip);
-          if (element && element.complete && element.naturalWidth) {
-            this.drawVisual(element, element.naturalWidth, element.naturalHeight, clip, local);
-          }
-        } else if (clip.type === 'text') {
-          this.drawText(clip, local);
-        } else if (clip.type === 'shape') {
-          this.drawShape(clip, local);
-        }
+    this.renderer.drawFrame(this.ctx, this.timeUs, (clip) => {
+      if (clip.type === 'video') {
+        const element = this.videoFor(clip);
+        if (!element || element.readyState < 2) return null;
+        return { source: element, width: element.videoWidth, height: element.videoHeight };
       }
-    }
-    ctx.restore();
+      if (clip.type === 'image') {
+        const element = this.imageFor(clip);
+        if (!element || !element.complete || !element.naturalWidth) return null;
+        return { source: element, width: element.naturalWidth, height: element.naturalHeight };
+      }
+      return null;
+    });
   }
 
   /** Recale tous les éléments audio/vidéo actifs. */
@@ -508,9 +253,18 @@ export class Preview {
               : null;
         if (!element) continue;
         const local = this.timeUs - placement.start_us;
-        const desired = (placement.source_start_us + local) / 1_000_000;
+        const desired = sourceTimeAt(clip, local) / 1_000_000;
         const gain = Math.min(1, Math.max(0, track.volume * this.audioGain(clip, local)));
         element.volume = gain;
+        const rate = clipSpeed(clip);
+        if (Math.abs(element.playbackRate - rate) > 1e-3) {
+          // 0.0625–16 : au-delà Chrome refuse la valeur.
+          try {
+            element.playbackRate = Math.min(16, Math.max(0.0625, rate));
+          } catch {
+            // ignoré
+          }
+        }
         if (clip.type === 'video') {
           (element as HTMLVideoElement).muted = track.muted || clip.audio_muted;
         } else {
@@ -580,19 +334,29 @@ export class Preview {
   seek(timeUs: number): void {
     const end = timelineEnd(this.project);
     this.timeUs = Math.min(end, Math.max(0, timeUs));
+    // Pendant la lecture, la boucle recalcule le temps depuis `clockOffsetUs` :
+    // sans recaler l'horloge ici, déplacer la tête de lecture était annulé à
+    // l'image suivante et il fallait mettre en pause pour se déplacer.
+    if (this.playing) {
+      this.clockStart = performance.now();
+      this.clockOffsetUs = this.timeUs;
+    }
     this.pauseAll();
     for (const track of this.project.tracks) {
-      const clip = activeClip(track, this.timeUs);
-      if (!clip) continue;
-      const placement = this.placementOf(clip);
-      const element =
-        clip.type === 'audio'
-          ? this.audios.get(clip.id) ?? this.audioFor(clip)
-          : clip.type === 'video'
-            ? this.videos.get(clip.id) ?? this.videoFor(clip)
-            : null;
-      if (element) {
-        const desired = (placement.source_start_us + (this.timeUs - placement.start_us)) / 1_000_000;
+      for (const clip of track.clips) {
+        const placement = this.placementOf(clip);
+        const active =
+          this.timeUs >= placement.start_us &&
+          this.timeUs < placement.start_us + placement.duration_us;
+        if (!active) continue;
+        const element =
+          clip.type === 'audio'
+            ? this.audios.get(clip.id) ?? this.audioFor(clip)
+            : clip.type === 'video'
+              ? this.videos.get(clip.id) ?? this.videoFor(clip)
+              : null;
+        if (!element) continue;
+        const desired = sourceTimeAt(clip, this.timeUs - placement.start_us) / 1_000_000;
         try {
           element.currentTime = Math.max(0, desired);
         } catch {
@@ -605,7 +369,7 @@ export class Preview {
   }
 
   refresh(): void {
-    this.placements = resolvePlacements(this.project);
+    this.renderer.refresh();
     this.prune();
     this.draw();
   }

@@ -1,54 +1,86 @@
-CUT THE FLOW — binaires
-======================
+CUT THE FLOW — mode d'emploi
+===========================
 
-Chaque fichier est un exécutable AUTONOME : l'interface Astro est embarquée
-dans le binaire, il n'y a rien à installer à côté.
+Ce dossier contient le studio de montage complet. Rien à installer, rien à
+télécharger en plus : l'interface est embarquée dans l'exécutable.
 
-  cuttheflow-windows-x86_64.exe   Windows 10/11 (64 bits)
-  cuttheflow-linux-x86_64         Linux x86-64 (statique, musl)
-  cuttheflow-linux-aarch64        Linux ARM64 (Raspberry Pi, serveurs ARM)
-  cuttheflow-macos-arm64          macOS Apple Silicon (signé ad-hoc)
-  cuttheflow-macos-x86_64         macOS Intel (signé ad-hoc)
+DÉMARRER
+--------
+Windows   double-cliquez sur  DEMARRER.cmd
+Linux     dans un terminal :  bash demarrer.sh
+macOS     double-cliquez sur  demarrer.command
+          (ou dans le Terminal :  bash demarrer.command)
 
-Les deux binaires macOS sont produits par GitHub Actions
-(`zigmoon/cuttheflow`), signés ad-hoc — obligatoire sur Apple Silicon — et
-notariés si les secrets Apple sont configurés. ffmpeg reste requis : posez-le
-à côté du binaire ou dans le PATH (`cuttheflow doctor` pour vérifier).
+Le studio s'ouvre tout seul dans votre navigateur, à l'adresse
+http://127.0.0.1:7317/ . Laissez la fenêtre noire ouverte pendant le montage :
+la fermer arrête le studio.
 
-Lancement
----------
-Windows : double-cliquez sur cuttheflow-windows-x86_64.exe
-Linux   : ./cuttheflow-linux-x86_64
-macOS   : ./cuttheflow-macos-arm64   (ou -x86_64)
+IMPORTANT (Windows) : gardez cuttheflow.exe ET libunwind.dll dans le même
+dossier. Sans le .dll, Windows refuse de démarrer l'exécutable sans expliquer
+pourquoi. Si vous déplacez l'exécutable, déplacez les deux.
 
-Le navigateur s'ouvre sur http://127.0.0.1:7317/ (--no-open pour l'éviter).
+IMPORTANT (macOS) : au premier lancement, macOS peut afficher « développeur non
+identifié ». Le lanceur lève lui-même ce blocage pour ce binaire. Si le
+double-clic ne fait rien (archive ZIP : le fichier n'est pas exécutable),
+ouvrez le Terminal dans ce dossier et tapez :  bash demarrer.command
 
-Prérequis : ffmpeg et ffprobe
------------------------------
-Le moteur d'export utilise ffmpeg. Il le cherche dans cet ordre :
+FICHIERS
+--------
+  cuttheflow           le moteur et l'interface (Windows : cuttheflow.exe)
+  libunwind.dll        Windows uniquement — dépendance de l'exécutable
+  DEMARRER.cmd         lanceur Windows
+  demarrer.sh          lanceur Linux
+  demarrer.command     lanceur macOS
+  LISEZ-MOI.txt        ce fichier
+  LICENSE              licence du logiciel
 
-  1. variables CTF_FFMPEG et CTF_FFPROBE
-  2. fichiers ffmpeg / ffprobe posés À CÔTÉ de l'exécutable
-  3. PATH du système
+FFMPEG : OPTIONNEL
+------------------
+Le studio fonctionne de deux façons :
 
-Installation :
-  Windows : winget install Gyan.FFmpeg
-  macOS   : brew install ffmpeg
-  Linux   : sudo apt install ffmpeg   (ou dnf/pacman)
+  • SANS ffmpeg — tout se fait dans votre navigateur (WebCodecs). Import,
+    montage, aperçu et export MP4 / WebM / MP3 fonctionnent normalement.
+    C'est le mode choisi automatiquement quand ffmpeg est absent.
 
-Vérification : ./cuttheflow doctor   (affiche ffmpeg, les encodeurs et la police)
+  • AVEC ffmpeg — le moteur natif prend le relais : rendu identique sur toutes
+    les machines, meilleur contrôle du débit. Recommandé pour les projets
+    longs ou lourds.
 
-Utilisation sans interface
+Pour l'activer, installez ffmpeg une seule fois :
+
+  Windows   winget install Gyan.FFmpeg
+  macOS     brew install ffmpeg
+  Linux     sudo apt install ffmpeg        (ou dnf install ffmpeg)
+
+Vous pouvez aussi poser ffmpeg et ffprobe directement dans ce dossier.
+Pour vérifier ce qui est détecté :  cuttheflow doctor
+Pour forcer un emplacement : variables CTF_FFMPEG et CTF_FFPROBE.
+
+UTILISATION SANS INTERFACE
 --------------------------
   cuttheflow doctor
   cuttheflow probe mon-film.mp4
   cuttheflow export projet.json --out montage.mp4 --format mp4 --crf 18
 
-Données
--------
-Médias importés, exports et cache : dossier indiqué au démarrage
-(%LOCALAPPDATA%\cuttheflow sous Windows, ~/.local/share/cuttheflow sous Linux).
-Aucune donnée ne quitte la machine : le serveur n'écoute que sur 127.0.0.1.
+OÙ SONT MES FICHIERS
+--------------------
+Médias importés, exports et cache restent sur cette machine, dans :
 
-Code source : rust/ (moteur), astro/ (interface). Licence propriétaire, voir
-LICENSE.
+  Windows   %LOCALAPPDATA%\cuttheflow
+  Linux     ~/.local/share/cuttheflow
+  macOS     ~/Library/Application Support/cuttheflow
+
+Aucune donnée ne quitte l'ordinateur : le serveur n'écoute que sur 127.0.0.1
+et refuse les connexions venant d'ailleurs.
+
+EN CAS DE PROBLÈME
+------------------
+  • Rien ne se passe au double-clic (Windows) : libunwind.dll manque, ou
+    l'archive a été ouverte sans être extraite. Extrayez tout le dossier.
+  • « ffmpeg est introuvable » : normal sans ffmpeg, le studio bascule en mode
+    navigateur. Installez ffmpeg pour utiliser le moteur natif.
+  • Le port 7317 est déjà pris :  cuttheflow serve --port 7320
+  • Tout autre cas :  cuttheflow doctor  (diagnostic lisible)
+
+Code source : rust/ (moteur), astro/ (interface). Licence propriétaire,
+voir LICENSE.

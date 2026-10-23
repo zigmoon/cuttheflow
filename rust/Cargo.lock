@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "ctf-app"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "ctf-core",
  "ctf-engine",
@@ -14,7 +14,7 @@ dependencies = [
 
 [[package]]
 name = "ctf-core"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -22,7 +22,7 @@ dependencies = [
 
 [[package]]
 name = "ctf-engine"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "ctf-core",
  "serde",

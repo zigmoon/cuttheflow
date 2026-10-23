@@ -55,6 +55,8 @@
   --left-w: 286px;
   --right-w: 326px;
   --timeline-h: 306px;
+  /* Hauteur de la timeline repliée : la bande de la barre d'outils seule. */
+  --timeline-strip-h: 54px;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
@@ -256,6 +258,89 @@ svg {
   overflow: hidden;
 }
 
+/* Timeline repliée : la scène prend toute la hauteur restante, la barre
+   d'outils réduite à sa bande permet de la rouvrir. */
+.app-shell[data-timeline='off'] {
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr) var(--timeline-strip-h) var(--status-h);
+}
+
+/* La timeline repliée garde sa largeur mesurable (les clips ne sont pas
+   recalculés au retour) mais ne prend plus aucune hauteur. */
+.app-shell[data-timeline='off'] .timeline-body {
+  flex: 0 0 0;
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell[data-timeline='off'] .timeline-resizer,
+.app-shell[data-timeline='off'] .timeline-toolbar > .toolbar-group:not(.right),
+.app-shell[data-timeline='off'] .timeline-toolbar .toolbar-sep,
+.app-shell[data-timeline='off'] #btn-zoom-out,
+.app-shell[data-timeline='off'] #btn-zoom-in {
+  display: none;
+}
+
+/* ── Règle compacte (timeline repliée) ───────────────────────────────── */
+
+.timeline-scrub {
+  display: none;
+  align-items: center;
+  height: 14px;
+  padding: 0 12px 4px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.app-shell[data-timeline='off'] .timeline-scrub {
+  display: flex;
+}
+
+.scrub-rail {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: height 120ms ease;
+}
+
+.timeline-scrub:hover .scrub-rail,
+.timeline-scrub.is-scrubbing .scrub-rail {
+  height: 6px;
+}
+
+.scrub-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.scrub-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  transform: translateY(-50%) scale(0.6);
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 1px var(--bg-base);
+  opacity: 0;
+  transition: opacity 120ms ease, transform 120ms ease;
+  pointer-events: none;
+}
+
+.timeline-scrub:hover .scrub-knob,
+.timeline-scrub.is-scrubbing .scrub-knob {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
 /* ── Barre supérieure ──────────────────────────────────────────────────── */
 
 .topbar {
@@ -288,25 +373,6 @@ svg {
   flex: none;
   color: var(--text);
   user-select: none;
-}
-
-.brand-sep {
-  width: 1px;
-  height: 17px;
-  background: var(--line);
-  flex: none;
-}
-
-.brand-word {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.17em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .topbar-actions,
@@ -380,16 +446,21 @@ svg {
   border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
+/* Annuler / rétablir : l'état « rien à faire » doit se voir sans être criard. */
+.tb-icon:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+/* Export reste lisible sans devenir un bloc blanc : en thème sombre
+   `--accent` est presque blanc, on le tempère avec la teinte secondaire. */
 .tb-export {
-  color: var(--accent);
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 62%, var(--text-dim));
+  font-weight: 600;
 }
 
 .tb-export:hover:not(:disabled) {
-  background: var(--accent-halo);
-  border-color: var(--accent-line);
-  color: var(--accent);
+  color: var(--text);
 }
 
 .prefs-toggle {
@@ -397,10 +468,33 @@ svg {
   background: var(--bg-base);
 }
 
+/* Trappes et Export : aucune boîte, ni au repos, ni au survol, ni au clic.
+   L'état actif se lit à la teinte de l'icône et à un point discret, pas par
+   un fond clair qui « flashe » dans le thème sombre. */
+.panel-toggle:hover:not(:disabled),
+.panel-toggle:active:not(:disabled),
+.tb-export:hover:not(:disabled),
+.tb-export:active:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+}
+
 .panel-toggle.is-active {
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-  color: var(--accent);
+  position: relative;
+  color: color-mix(in srgb, var(--accent) 58%, var(--text-dim));
+}
+
+.panel-toggle.is-active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
 }
 
 .engine-badge {
@@ -597,6 +691,12 @@ svg {
   height: 14px;
 }
 
+.icon-btn.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
 .icon-btn:hover:not(:disabled) {
   background: var(--bg-raised);
   border-color: var(--line-strong);
@@ -709,16 +809,18 @@ svg {
   gap: 10px;
 }
 
-.sidebar-foot {
+/* Insertion de titres et de formes : un bandeau sous l'en-tête du panneau,
+   avant la liste des médias — plus de commande cachée en bas. */
+.insert-strip {
   flex: none;
-  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
   padding: 9px 12px 11px;
   display: flex;
   flex-direction: column;
   gap: 7px;
 }
 
-.foot-label {
+.strip-label {
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.2em;
@@ -726,18 +828,18 @@ svg {
   color: var(--text-faint);
 }
 
-.foot-actions {
+.insert-actions {
   display: flex;
   gap: 5px;
   flex-wrap: wrap;
 }
 
-.foot-actions .btn {
+.insert-actions .btn {
   flex: 1;
   min-width: 0;
 }
 
-.foot-actions .btn span {
+.insert-actions .btn span {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1031,37 +1133,28 @@ svg {
 .transport {
   flex: none;
   display: grid;
-  /* Colonnes symétriques : le bloc central est centré sur la largeur de la
-     scène, quoi qu'il arrive à gauche ou à droite. */
+  /* Colonnes symétriques : les trois boutons tombent au centre exact de la
+     scène, le temps se range à droite. */
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 10px;
-  padding: 7px 14px 9px;
+  padding: 5px 14px;
   border-top: 1px solid var(--line-soft);
   background: var(--bg-surface);
-}
-
-.transport-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
 }
 
 .transport-buttons {
   display: flex;
   align-items: center;
   gap: 9px;
-}
-
-.transport-side {
-  min-width: 0;
+  justify-self: center;
 }
 
 .transport-clock {
   display: flex;
   align-items: baseline;
   gap: 5px;
+  justify-self: end;
 }
 
 .transport-btn,
@@ -1639,6 +1732,52 @@ svg {
   border-bottom: 1px solid var(--line-soft);
 }
 
+/* Repli : l'icône bascule entre « scène + timeline » et « scène seule », et la
+   barre annonce où est passée la timeline. */
+.timeline-focus .ico-restore {
+  display: none;
+}
+
+.timeline-focus.is-active .ico-focus {
+  display: none;
+}
+
+.timeline-focus.is-active .ico-restore {
+  display: block;
+}
+
+/* Même dosage que les trappes de la barre supérieure : l'état « timeline
+   rangée » se lit, sans faire un point blanc dans la barre d'outils. */
+.timeline-focus.is-active {
+  color: color-mix(in srgb, var(--accent) 58%, var(--text-dim));
+  background: var(--bg-raised);
+  border-color: var(--line);
+}
+
+.timeline-collapsed-label {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.timeline-collapsed-label svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.app-shell[data-timeline='off'] .timeline-collapsed-label {
+  display: inline-flex;
+}
+
 .toolbar-group {
   display: flex;
   align-items: center;
@@ -1835,6 +1974,13 @@ svg {
   outline-offset: -2px;
 }
 
+/* Le média glissé ne peut pas aller sur cette piste : il atterrira ailleurs. */
+.track-row.drop-redirect {
+  background: transparent;
+  outline-style: dotted;
+  outline-color: var(--warn, #e0b341);
+}
+
 .clip {
   position: absolute;
   top: 7px;
@@ -1975,6 +2121,140 @@ svg {
   height: 9px;
 }
 
+.clip-badge.speed {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-strong));
+}
+
+.clip-badge.mask,
+.clip-badge.kf {
+  color: var(--accent-2, var(--accent));
+}
+
+.clip-wave {
+  position: absolute;
+  left: 1px;
+  top: 4px;
+  width: calc(100% - 2px);
+  height: calc(100% - 8px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ── Keyframes, vitesse, masque (panneau Propriétés) ───────────────── */
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 6px;
+}
+
+.chip {
+  padding: 3px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.chip.is-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text);
+}
+
+.kf-props {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.kf-prop-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.kf-prop-row.is-on {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+}
+
+.kf-name {
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kf-count {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+.kf-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.kf-key {
+  display: grid;
+  grid-template-columns: auto 1fr 62px auto 76px auto;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--bg-surface);
+  font-size: 10px;
+}
+
+.kf-time {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+.kf-key .kf-value {
+  width: 62px;
+  padding: 2px 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.kf-unit {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+.kf-key select {
+  font-size: 10px;
+}
+
+.hint.warn {
+  color: var(--warn, #e0b341);
+}
+
 .playhead {
   position: absolute;
   top: 0;
@@ -1994,6 +2274,21 @@ svg {
   height: 11px;
   border-radius: 3px;
   background: var(--danger);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+/* Zone de préhension large, limitée à la règle : viser un trait d'un pixel est
+   impossible, mais élargir sur toute la hauteur masquerait les clips voisins. */
+.playhead::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -7px;
+  width: 15px;
+  height: 24px;
+  pointer-events: auto;
+  cursor: ew-resize;
 }
 
 /* ── Barre d'état ──────────────────────────────────────────────────────── */
@@ -2189,6 +2484,16 @@ svg {
   color: var(--text-faint);
 }
 
+/* Avertissement de compatibilité, affiché dès l'ouverture du dialogue : il
+   explique pourquoi « Export » est grisé avant même de lancer le rendu. */
+#exportEncoderNotice {
+  margin-top: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warn) 34%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+}
+
 .export-progress {
   display: flex;
   flex-direction: column;
@@ -2244,6 +2549,18 @@ svg {
 
 .export-result a:hover {
   background: var(--accent-bright);
+}
+
+/* Avertissement non bloquant (audio non décodable) : l'export a réussi, mais
+   le fichier est incomplet et doit le dire là où l'utilisateur le lit. */
+.export-warn {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  color: var(--warn);
+  font-size: 11px;
+  line-height: 1.55;
+  user-select: text;
 }
 
 .export-error {
@@ -2386,6 +2703,77 @@ svg {
   pointer-events: none;
 }
 
+.app-shell[data-timeline='off'] ~ .toast-host {
+  bottom: calc(var(--status-h) + 16px);
+}
+
+/* ── Bandeau de mise à jour ───────────────────────────────────────────── */
+
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--status-h) + var(--timeline-h) + 16px);
+  transform: translateX(-50%);
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 9px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 11.5px;
+  box-shadow: var(--shadow-toast);
+  animation: toast-in 180ms var(--ease);
+  max-width: min(560px, 94vw);
+}
+
+.update-banner[hidden] {
+  display: none;
+}
+
+.app-shell[data-timeline='off'] ~ .update-banner {
+  bottom: calc(var(--status-h) + 16px);
+}
+
+.update-banner .update-icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--accent);
+}
+
+.update-banner .update-text {
+  min-width: 0;
+}
+
+.update-banner .update-dismiss {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.update-banner .update-dismiss:hover {
+  background: var(--bg-base);
+  color: var(--text);
+}
+
+.prefs-version {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--text-faint);
+}
+
 .toast {
   padding: 9px 15px;
   border: 1px solid var(--line-strong);
@@ -2425,10 +2813,6 @@ svg {
   :root {
     --left-w: 250px;
     --right-w: 292px;
-  }
-
-  .brand-word {
-    display: none;
   }
 
   @media (max-width: 1020px) {

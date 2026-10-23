@@ -3,6 +3,8 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "allowJs": true,
+    "types": ["vite/client"]
   }
 }

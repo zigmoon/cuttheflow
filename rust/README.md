@@ -72,9 +72,11 @@ Deux natures, dans `crates/ctf-core/src/plan.rs` :
 
 - **`fade`** — fondu depuis le fond : simple rampe alpha au début du clip,
   aucune fenêtre déplacée. La synchronisation est garantie par construction.
-- **`dissolve`** — fondu enchaîné : la fenêtre du clip entrant recule de `d` et
-  son point d'entrée source recule **exactement de `d`**. L'image et le son
-  subissent le même décalage, sinon le son arriverait `d` trop tard.
+- **`dissolve`** — fondu enchaîné : la fenêtre du clip entrant recule de `d`,
+  s'allonge de `d` (le point de sortie reste inchangé, donc pas de trou avant
+  le clip suivant) et son point d'entrée source recule **exactement de `d`**.
+  L'image et le son subissent le même décalage et le même allongement, sinon le
+  son arriverait `d` trop tard.
 
 `d` est borné par les marges réellement disponibles : marge avant du clip
 entrant (`source_start`), marge après du clip sortant (durée du média − point de
@@ -211,11 +213,23 @@ cargo +stable-x86_64-pc-windows-gnullvm build --release --target x86_64-unknown-
 cargo +stable-x86_64-pc-windows-gnullvm build --release --target aarch64-unknown-linux-musl -p ctf-app
 ```
 
-### macOS
+### macOS (cross-compilation depuis Windows)
 
-Le linkage Mach-O exige le SDK Apple : **impossible depuis Windows**. Le
-workflow `.github/workflows/cuttheflow.yml (à la racine du dépôt)` construit `aarch64-apple-darwin`
-(Apple Silicon) et `x86_64-apple-darwin` (Intel) sur des runners macOS.
+Le linkage Mach-O passe par **Zig**, qui fournit les stubs de la `libSystem` :
+aucun Mac n'est nécessaire. Une seule fois :
+
+```powershell
+cargo +stable-x86_64-pc-windows-gnullvm install cargo-zigbuild --locked
+rustup +stable-x86_64-pc-windows-gnullvm target add aarch64-apple-darwin x86_64-apple-darwin
+# Zig dans le PATH (https://ziglang.org/download/) — testé avec 0.14.1
+cargo +stable-x86_64-pc-windows-gnullvm zigbuild --release --target aarch64-apple-darwin -p ctf-app
+cargo +stable-x86_64-pc-windows-gnullvm zigbuild --release --target x86_64-apple-darwin -p ctf-app
+```
+
+`scripts/build.ps1` enchaîne ces deux cibles dès que `zig` et `cargo-zigbuild`
+sont présents ; sinon l'étape est ignorée avec un avertissement. Le workflow
+`.github/workflows/cuttheflow.yml` reste la voie officielle (runners macOS) et
+ajoute la signature.
 
 Signature, en deux niveaux :
 
@@ -239,8 +253,14 @@ une signature en échec n'empêche pas la publication du fichier ad-hoc signé.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
-# interface Astro + Windows + Linux x64/ARM64 + dist/ + SHA256SUMS.txt
+# interface Astro + Windows + Linux x64/ARM64 + macOS arm64/x86_64
+# + dist/ + SHA256SUMS.txt
 ```
+
+Les binaires macOS produits ici ne sont **pas signés** (Zig ne signe pas) : sur
+Apple Silicon, il faut appliquer la signature ad-hoc sur le Mac (`codesign
+--force --sign - cuttheflow-macos-arm64`) avant exécution. Le workflow CI le
+fait automatiquement.
 
 ## Tests
 

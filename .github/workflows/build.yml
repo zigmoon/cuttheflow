@@ -1,16 +1,23 @@
-# Construction des binaires CUT THE FLOW sur les trois systèmes.
+# Construction de CUT THE FLOW sur les trois systèmes, et PUBLICATION des
+# fichiers téléchargeables.
 #
-# CE FICHIER VIT À LA RACINE DU DÉPÔT (`.github/workflows/build.yml`) : GitHub
-# n'exécute que les workflows présents à cet endroit. Les chemins ci-dessous
-# supposent que `astro/` et `rust/` sont à la racine du dépôt.
+# Ce fichier vit à la racine du dépôt (`.github/workflows/build.yml`) : GitHub
+# n'exécute que les workflows présents à cet endroit. Les chemins supposent que
+# `astro/` et `rust/` sont à la racine.
 #
-# macOS ne peut être produit que sur un hôte macOS (SDK Apple). C'est tout
-# l'intérêt de ce workflow.
+# ── Pourquoi une version « glissante » ────────────────────────────────
+# Chaque poussée sur `main` reconstruit les cinq binaires et met à jour une
+# release dont le tag est `latest`. Les liens de téléchargement du README sont
+# donc stables et toujours valables :
 #
-# Signature macOS — deux niveaux, jamais bloquants :
+#   https://github.com/zigmoon/cuttheflow/releases/latest/download/<fichier>
+#
+# Un tag `cuttheflow-v*` crée en plus une release versionnée, marquée comme
+# « latest » elle aussi : les mêmes liens continuent de fonctionner.
+#
+# ── Signature macOS : deux niveaux, jamais bloquants ──────────────────
 #   1. TOUJOURS : signature ad-hoc (`codesign -s -`). Indispensable : sur Apple
-#      Silicon, un binaire non signé est tué par le noyau, même téléchargé
-#      depuis un dépôt interne.
+#      Silicon, un binaire non signé est tué par le noyau.
 #   2. SI les secrets sont fournis : signature Developer ID (durcie) +
 #      notarisation Apple + agrafage. Secrets attendus :
 #        MACOS_CERT_P12          certificat .p12 encodé en base64
@@ -19,26 +26,31 @@
 #        MACOS_NOTARY_APPLE_ID   identifiant Apple
 #        MACOS_NOTARY_PASSWORD   mot de passe d'application (app-specific)
 #        MACOS_NOTARY_TEAM_ID    identifiant d'équipe
-#      (variante API key acceptée : MACOS_NOTARY_KEY_ID / MACOS_NOTARY_ISSUER_ID
-#       / MACOS_NOTARY_KEY_P8, contenu du .p8 en base64.)
-#      Sans ces secrets le workflow réussit quand même : les binaires sont
-#      ad-hoc signés, donc exécutables, simplement non notariés.
+#      (variante clé API : MACOS_NOTARY_KEY_ID / MACOS_NOTARY_ISSUER_ID /
+#       MACOS_NOTARY_KEY_P8, contenu du .p8 en base64.)
+#      Sans ces secrets le workflow réussit : les binaires sont ad-hoc signés,
+#      donc exécutables, simplement non notariés.
 
-name: CUT THE FLOW 2
+name: CUT THE FLOW
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-    paths:
-      - '**'
-      - '.github/workflows/build.yml'
     tags:
       - 'cuttheflow-v*'
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
+
+# Deux poussées rapprochées ne doivent pas se disputer la même release.
+concurrency:
+  group: cuttheflow-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -63,32 +75,49 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             name: Windows x86-64
-            artifact_name: cuttheflow-windows-x86_64.exe
+            binary: cuttheflow-windows-x86_64.exe
             bin: cuttheflow.exe
-            artifact: cuttheflow-windows-x86_64
+            package: windows-x86_64
+            launcher: DEMARRER.cmd
+            compress: powershell
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             name: Linux x86-64
-            artifact_name: cuttheflow-linux-x86_64
+            binary: cuttheflow-linux-x86_64
             bin: cuttheflow
-            artifact: cuttheflow-linux-x86_64
+            package: linux-x86_64
+            launcher: demarrer.sh
+            compress: zip
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            name: Linux ARM64
+            binary: cuttheflow-linux-aarch64
+            bin: cuttheflow
+            package: linux-aarch64
+            launcher: demarrer.sh
+            compress: zip
+            cross: aarch64-linux-gnu-gcc
           - os: macos-15
             target: aarch64-apple-darwin
             name: macOS Apple Silicon
-            artifact_name: cuttheflow-macos-arm64
+            binary: cuttheflow-macos-arm64
             bin: cuttheflow
-            artifact: cuttheflow-macos-arm64
+            package: macos-arm64
+            launcher: demarrer.command
+            compress: zip
           - os: macos-15-intel
             target: x86_64-apple-darwin
             name: macOS Intel
-            artifact_name: cuttheflow-macos-x86_64
+            binary: cuttheflow-macos-x86_64
             bin: cuttheflow
-            artifact: cuttheflow-macos-x86_64
+            package: macos-x86_64
+            launcher: demarrer.command
+            compress: zip
 
     runs-on: ${{ matrix.os }}
     env:
-      # Les secrets sont exposés au niveau du job : `if` ne peut pas lire un
-      # `env` défini sur l'étape elle-même.
+      # Les secrets sont exposés au niveau du job : un `if` d'étape ne peut pas
+      # lire un `env` défini sur cette même étape.
       MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
       MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
       MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
@@ -112,19 +141,32 @@ jobs:
           npm ci --prefix astro
           npm run build --prefix astro
 
-      - name: Dépendances Linux (musl)
-        if: runner.os == 'Linux'
+      - name: Dépendances Linux (musl x86-64)
+        if: runner.os == 'Linux' && matrix.cross == ''
         run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Dépendances Linux (musl ARM64)
+        if: runner.os == 'Linux' && matrix.cross != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Moteur Rust
+      - name: Moteur Rust (natif)
+        if: matrix.cross == ''
+        run: cargo build --release --manifest-path rust/Cargo.toml --target ${{ matrix.target }} -p ctf-app
+
+      - name: Moteur Rust (ARM64 croisé)
+        if: matrix.cross != ''
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: ${{ matrix.cross }}
         run: cargo build --release --manifest-path rust/Cargo.toml --target ${{ matrix.target }} -p ctf-app
 
       - name: Tests unitaires du noyau
-        if: runner.os != 'Linux'
+        if: matrix.cross == '' && runner.os != 'Linux'
         run: cargo test --release --manifest-path rust/Cargo.toml --target ${{ matrix.target }} -p ctf-core
 
       # ── macOS : signature ──────────────────────────────────────────────
@@ -166,10 +208,8 @@ jobs:
         run: |
           set -euo pipefail
           BIN="rust/target/${{ matrix.target }}/release/${{ matrix.bin }}"
-          NAME="${{ matrix.artifact_name }}"
-          ZIP="$RUNNER_TEMP/$NAME.zip"
+          ZIP="$RUNNER_TEMP/notarise.zip"
           ditto -c -k --keepParent "$BIN" "$ZIP"
-
           if [ -n "${MACOS_NOTARY_KEY_P8:-}" ]; then
             echo "$MACOS_NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
             xcrun notarytool submit "$ZIP" --key "$RUNNER_TEMP/notary.p8" \
@@ -182,50 +222,110 @@ jobs:
           xcrun stapler staple "$BIN" || xcrun stapler staple "$ZIP"
           rm -f "$ZIP"
 
-      # ── Assemblage ─────────────────────────────────────────────────────
+      # ── Assemblage : binaire nu + archive prête à l'emploi ────────────
+      #
+      # Deux formes pour deux usages : le binaire seul pour les scripts et les
+      # utilisateurs avancés, l'archive pour celui qui veut double-cliquer.
       - name: Assemblage
         shell: bash
         run: |
-          mkdir -p out
-          cp "rust/target/${{ matrix.target }}/release/${{ matrix.bin }}" \
-             "out/${{ matrix.artifact_name }}"
-          cp rust/scripts/lisez-moi-dist.txt out/LISEZ-MOI.txt
-          cp LICENSE out/LICENSE
-          cd out
-          # `shasum` n'existe pas dans Git Bash sous Windows : on prend ce qui
-          # est disponible plutôt que de spécialiser l'étape par système.
-          if command -v shasum >/dev/null 2>&1; then
-            shasum -a 256 "${{ matrix.artifact_name }}" > "${{ matrix.artifact_name }}.sha256"
-          else
-            sha256sum "${{ matrix.artifact_name }}" > "${{ matrix.artifact_name }}.sha256"
-          fi
-          cat "${{ matrix.artifact_name }}.sha256"
+          set -euo pipefail
+          BIN="rust/target/${{ matrix.target }}/release/${{ matrix.bin }}"
+          STAGE="$RUNNER_TEMP/pkg"
+          mkdir -p dist "$STAGE"
+          cp "$BIN" "dist/${{ matrix.binary }}"
+          cp "$BIN" "$STAGE/${{ matrix.bin }}"
+          cp rust/scripts/lisez-moi-dist.txt "$STAGE/LISEZ-MOI.txt"
+          cp LICENSE "$STAGE/LICENSE"
+          cp "rust/scripts/lanceurs/${{ matrix.launcher }}" "$STAGE/${{ matrix.launcher }}"
+          chmod +x "dist/${{ matrix.binary }}" "$STAGE/${{ matrix.bin }}" || true
+          ls -l dist "$STAGE"
+
+      - name: Archive (Linux, macOS)
+        if: matrix.compress == 'zip'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/pkg"
+          zip -q -r "$GITHUB_WORKSPACE/dist/CUTTHEFLOW-${{ matrix.package }}.zip" .
+          cd "$GITHUB_WORKSPACE/dist"
+          unzip -l "CUTTHEFLOW-${{ matrix.package }}.zip"
+
+      - name: Archive (Windows)
+        if: matrix.compress == 'powershell'
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'pkg'
+          Compress-Archive -Path (Join-Path $stage '*') `
+            -DestinationPath "dist/CUTTHEFLOW-${{ matrix.package }}.zip" -Force
+          Get-ChildItem dist | Select-Object Name, Length
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: out/*
+          name: ctf-${{ matrix.package }}
+          path: dist/*
           if-no-files-found: error
 
   release:
-    name: Publication des binaires
+    name: Publication des fichiers téléchargeables
     needs: build
-    if: startsWith(github.ref, 'refs/tags/cuttheflow-v')
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/cuttheflow-v'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: artefacts
           merge-multiple: true
-      - name: Sommes SHA-256 globales
+
+      - name: Sommes SHA-256
         run: |
           cd artefacts
           ls -l
-          shasum -a 256 cuttheflow-* > SHA256SUMS.txt
+          sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v2
+
+      - name: Notes de version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./astro/package.json').version")
+          ENGINE=$(grep -m1 '^version' rust/Cargo.toml | cut -d'"' -f2)
+          BASE="https://github.com/zigmoon/cuttheflow/releases/latest/download"
+          {
+            echo "Studio **${VERSION}** · moteur **${ENGINE}**"
+            echo
+            echo "L'interface est embarquée dans chaque exécutable : rien à installer à côté."
+            echo "**ffmpeg est optionnel** — sans lui, le studio travaille dans le navigateur"
+            echo "(WebCodecs) : import, montage, aperçu et export MP4 / WebM / MP3."
+            echo
+            echo "| Système | Archive (avec lanceur) | Binaire seul |"
+            echo "|---|---|---|"
+            echo "| Windows 10/11 x64 | [CUTTHEFLOW-windows-x86_64.zip](${BASE}/CUTTHEFLOW-windows-x86_64.zip) | [cuttheflow-windows-x86_64.exe](${BASE}/cuttheflow-windows-x86_64.exe) |"
+            echo "| Linux x86-64 | [CUTTHEFLOW-linux-x86_64.zip](${BASE}/CUTTHEFLOW-linux-x86_64.zip) | [cuttheflow-linux-x86_64](${BASE}/cuttheflow-linux-x86_64) |"
+            echo "| Linux ARM64 | [CUTTHEFLOW-linux-aarch64.zip](${BASE}/CUTTHEFLOW-linux-aarch64.zip) | [cuttheflow-linux-aarch64](${BASE}/cuttheflow-linux-aarch64) |"
+            echo "| macOS Apple Silicon | [CUTTHEFLOW-macos-arm64.zip](${BASE}/CUTTHEFLOW-macos-arm64.zip) | [cuttheflow-macos-arm64](${BASE}/cuttheflow-macos-arm64) |"
+            echo "| macOS Intel | [CUTTHEFLOW-macos-x86_64.zip](${BASE}/CUTTHEFLOW-macos-x86_64.zip) | [cuttheflow-macos-x86_64](${BASE}/cuttheflow-macos-x86_64) |"
+            echo
+            echo "**Démarrer** — Windows : \`DEMARRER.cmd\` · Linux : \`bash demarrer.sh\` · macOS : \`demarrer.command\`"
+            echo "Le studio s'ouvre sur http://127.0.0.1:7317/"
+            echo
+            echo "Le studio web reste disponible : https://app.zigmoon.com/CUTTHEFLOW/"
+            echo
+            echo "Intégrité : voir \`SHA256SUMS.txt\` dans les fichiers ci-dessous."
+          } > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
+          echo "RELEASE_NOTES=$RUNNER_TEMP/release-notes.md" >> "$GITHUB_ENV"
+
+      - name: Release (version glissante ou taguée)
+        uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'CUT THE FLOW — dernière version' }}
+          body_path: ${{ env.RELEASE_NOTES }}
           files: artefacts/*
-          generate_release_notes: true
+          make_latest: true
+          fail_on_unmatched_files: true

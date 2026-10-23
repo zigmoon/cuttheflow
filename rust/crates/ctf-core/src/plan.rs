@@ -2,10 +2,12 @@
 //!
 //! Une transition « fondu enchaîné » ne peut pas être dessinée sans que les deux
 //! clips se recouvrent. On déplace donc la fenêtre du clip entrant de `d` en
-//! arrière, et son point d'entrée source de `d` aussi. **L'image et le son
-//! subissent exactement le même décalage** : c'est la seule façon de garder la
-//! synchronisation parfaite (un décalage d'un seul côté produirait un décalage
-//! audible de `d`).
+//! arrière, et son point d'entrée source de `d` aussi. La fenêtre est également
+//! **allongée de `d`** : son point de sortie ne bouge pas, donc le clip suivant
+//! posé au contact d'origine reste collé et aucun trou noir/silencieux
+//! n'apparaît. **L'image et le son subissent exactement le même décalage et le
+//! même allongement** : c'est la seule façon de garder la synchronisation
+//! parfaite (un décalage d'un seul côté produirait un décalage audible de `d`).
 //!
 //! `d` est borné par les trois ressources réellement disponibles :
 //!   • la marge avant du clip entrant (`source_start_us`) ;
@@ -95,6 +97,11 @@ pub fn resolve_track(clips: &[Clip], media_durations: &[Micros]) -> Vec<Placemen
 
         placements[index].start_us -= d;
         placements[index].source_start_us -= d;
+        // La fenêtre recule de `d` ET s'allonge de `d` : le point de sortie
+        // d'origine est conservé. Sans cet allongement, le clip suivant (posé
+        // au contact d'origine) laisserait un trou de `d` — image noire et
+        // silence — entre les deux clips.
+        placements[index].duration_us += d;
         placements[index].dissolve_us = d;
         placements[index].fade_in_us = placements[index].fade_in_us.max(d);
     }
@@ -193,6 +200,9 @@ mod tests {
             effects: vec![],
             transition: None,
             rotation: 0.0,
+            speed: 1.0,
+            keyframes: Vec::new(),
+            mask: None,
         }
     }
 
@@ -232,6 +242,8 @@ mod tests {
         let placements = resolve_track(&clips, &[10_000_000, 10_000_000]);
         assert_eq!(placements[1].start_us, 1_500_000);
         assert_eq!(placements[1].source_start_us, 2_500_000);
+        assert_eq!(placements[1].duration_us, 2_500_000);
+        assert_eq!(placements[1].end_us(), 4_000_000);
         assert_eq!(placements[1].dissolve_us, 500_000);
         assert_eq!(placements[1].fade_in_us, 500_000);
         // L'écart de fenêtre et l'écart de source sont identiques : A/V synchro.
@@ -270,6 +282,8 @@ mod tests {
         assert_eq!(placements[1].dissolve_us, 100_000);
         assert_eq!(placements[1].start_us, 5_800_000);
         assert_eq!(placements[1].source_start_us, 3_900_000);
+        assert_eq!(placements[1].duration_us, 2_100_000);
+        assert_eq!(placements[1].end_us(), 7_900_000);
     }
 
     #[test]

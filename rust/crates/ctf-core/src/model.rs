@@ -290,6 +290,15 @@ pub struct Clip {
     /// Rotation du clip autour de son centre, en degrés.
     #[serde(default)]
     pub rotation: f64,
+    /// Vitesse de lecture (1.0 = temps réel). Non rendue par le moteur : le
+    /// champ est lu uniquement pour refuser le projet au lieu de produire un
+    /// export silencieusement faux.
+    #[serde(default = "one")]
+    pub speed: f64,
+    #[serde(default)]
+    pub keyframes: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub mask: Option<serde_json::Value>,
 }
 
 fn one() -> f64 {
@@ -302,6 +311,20 @@ fn half() -> f64 {
 impl Clip {
     pub fn end_us(&self) -> Micros {
         self.start_us.saturating_add(self.duration_us)
+    }
+
+    /// Vrai si le clip utilise une fonction que ffmpeg ne rend pas encore.
+    pub fn needs_browser_render(&self) -> Option<&'static str> {
+        if (self.speed - 1.0).abs() > 1e-6 {
+            return Some("vitesse");
+        }
+        if !self.keyframes.is_empty() {
+            return Some("keyframes");
+        }
+        if self.mask.is_some() {
+            return Some("masque");
+        }
+        None
     }
 
     pub fn is_visual(&self) -> bool {
@@ -635,6 +658,9 @@ mod tests {
             effects: Vec::new(),
             transition: None,
             rotation: 0.0,
+            speed: 1.0,
+            keyframes: Vec::new(),
+            mask: None,
         }
     }
 
@@ -660,9 +686,22 @@ mod tests {
     }
 
     #[test]
-    fn projet_valide() {
-        assert!(project().validate().is_ok());
+    fn detecte_les_fonctions_non_rendues() {
+        let mut c = clip("c1", ClipKind::Video, Some("m1"));
+        assert_eq!(c.needs_browser_render(), None);
+        c.speed = 2.0;
+        assert_eq!(c.needs_browser_render(), Some("vitesse"));
+        c.speed = 1.0;
+        c.keyframes = vec![serde_json::json!({ "prop": "opacity", "time_us": 0, "value": 1.0 })];
+        assert_eq!(c.needs_browser_render(), Some("keyframes"));
+        c.keyframes.clear();
+        c.mask = Some(serde_json::json!({ "kind": "rect" }));
+        assert_eq!(c.needs_browser_render(), Some("masque"));
     }
+
+    #[test]
+    fn projet_valide() {
+        assert!(project().validate().is_ok());    }
 
     #[test]
     fn refuse_resolution_impaire() {

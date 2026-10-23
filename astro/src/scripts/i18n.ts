@@ -25,6 +25,15 @@ const STRINGS: Record<string, Entry> = {
   'file.saveTitle': { en: 'Save the project (Ctrl+S)', fr: 'Enregistrer le projet (Ctrl+S)' },
   'file.menu': { en: 'File', fr: 'Fichier' },
 
+  // ── Historique ───────────────────────────────────────────────────────
+  'edit.undo': { en: 'Undo', fr: 'Annuler' },
+  'edit.undoTitle': { en: 'Undo (Ctrl+Z)', fr: 'Annuler (Ctrl+Z)' },
+  'edit.redo': { en: 'Redo', fr: 'Rétablir' },
+  'edit.redoTitle': { en: 'Redo (Ctrl+Shift+Z)', fr: 'Rétablir (Ctrl+Maj+Z)' },
+  'history.undone': { en: 'Undone.', fr: 'Annulé.' },
+  'history.redone': { en: 'Redone.', fr: 'Rétabli.' },
+  'history.nothing': { en: 'Nothing to undo or redo.', fr: 'Rien à annuler ni à rétablir.' },
+
   // ── Actions ──────────────────────────────────────────────────────────
   'act.import': { en: 'Import', fr: 'Importer' },
   'act.importTitle': { en: 'Import media (Ctrl+I)', fr: 'Importer des médias (Ctrl+I)' },
@@ -110,6 +119,48 @@ const STRINGS: Record<string, Entry> = {
   'props.section.source': { en: 'Source', fr: 'Source' },
   'props.deleteClip': { en: 'Delete clip', fr: 'Supprimer le clip' },
   'props.audioMuted': { en: 'Mute this clip', fr: 'Couper le son du clip' },
+  'props.section.speed': { en: 'Speed', fr: 'Vitesse' },
+  'props.section.keyframes': { en: 'Keyframes', fr: 'Keyframes' },
+  'props.section.mask': { en: 'Mask', fr: 'Masque' },
+
+  'speed.hint': {
+    en: 'The clip keeps the same portion of the source: 2× halves its length on the timeline, audio included.',
+    fr: 'Le clip garde la même portion de la source : 2× divise sa longueur par deux sur la timeline, audio compris.',
+  },
+  'speed.reset': { en: '1× (reset)', fr: '1× (reset)' },
+
+  'kf.hint': {
+    en: 'A keyframe records the value at the playhead. Two keys animate the property; outside the range the value holds.',
+    fr: 'Une clé enregistre la valeur à la tête de lecture. Deux clés animent la propriété ; hors plage la valeur est tenue.',
+  },
+  'kf.add': { en: 'Add a keyframe at the playhead', fr: 'Ajouter une clé à la tête de lecture' },
+  'kf.remove': { en: 'Remove all keyframes for this property', fr: 'Supprimer toutes les clés de cette propriété' },
+  'kf.count': { en: '{n} key(s)', fr: '{n} clé(s)' },
+  'kf.easing': { en: 'Easing', fr: 'Interpolation' },
+  'kf.clear': { en: 'Clear all keyframes', fr: 'Effacer toutes les clés' },
+  'easing.linear': { en: 'Linear', fr: 'Linéaire' },
+  'easing.ease-in': { en: 'Ease in', fr: 'Entrée' },
+  'easing.ease-out': { en: 'Ease out', fr: 'Sortie' },
+  'easing.ease-in-out': { en: 'Ease in-out', fr: 'Entrée-sortie' },
+
+  'mask.enable': { en: 'Mask this clip', fr: 'Masquer ce clip' },
+  'mask.kind': { en: 'Shape', fr: 'Forme' },
+  'mask.rect': { en: 'Rectangle', fr: 'Rectangle' },
+  'mask.ellipse': { en: 'Ellipse', fr: 'Ellipse' },
+  'mask.x': { en: 'Centre X', fr: 'Centre X' },
+  'mask.y': { en: 'Centre Y', fr: 'Centre Y' },
+  'mask.width': { en: 'Mask width', fr: 'Largeur du masque' },
+  'mask.height': { en: 'Mask height', fr: 'Hauteur du masque' },
+  'mask.feather': { en: 'Feather', fr: 'Adoucissement' },
+  'mask.invert': { en: 'Invert (cut a hole)', fr: 'Inverser (creuser un trou)' },
+  'mask.hint': {
+    en: 'The mask cuts the clip itself, not the layers below it.',
+    fr: 'Le masque découpe le clip lui-même, pas les calques en dessous.',
+  },
+
+  'badge.speed': { en: 'Speed {speed}×', fr: 'Vitesse {speed}×' },
+  'badge.mask': { en: 'Masked clip', fr: 'Clip masqué' },
+  'badge.keyframes': { en: '{n} keyframe(s)', fr: '{n} keyframe(s)' },
 
   'field.name': { en: 'Name', fr: 'Nom' },
   'field.start': { en: 'Start (s)', fr: 'Début (s)' },
@@ -227,6 +278,38 @@ const STRINGS: Record<string, Entry> = {
   'tl.hint': { en: 'Drag media onto a track', fr: 'Glissez un média sur une piste' },
   'tl.zoomIn': { en: 'Zoom timeline in (+)', fr: 'Zoomer la timeline (+)' },
   'tl.zoomOut': { en: 'Zoom timeline out (−)', fr: 'Dézoomer la timeline (−)' },
+  'tl.scrubTitle': {
+    en: 'Drag to move through the edit (the timeline is collapsed)',
+    fr: 'Glisser pour parcourir le montage (timeline repliée)',
+  },
+  'tl.fit': { en: 'Fit the whole edit in the window', fr: 'Afficher tout le montage' },
+
+  // ── Mise à jour de l'application (service worker) ────────────────────
+  'sw.ready': {
+    en: 'A new version of the studio is ready.',
+    fr: 'Une nouvelle version du studio est prête.',
+  },
+  'sw.activated': {
+    en: 'The studio was updated.',
+    fr: 'Le studio a été mis à jour.',
+  },
+  'sw.reload': { en: 'Update', fr: 'Mettre à jour' },
+  'sw.reloadNow': { en: 'Reload', fr: 'Recharger' },
+  'sw.updating': { en: 'Updating…', fr: 'Mise à jour…' },
+  'sw.later': { en: 'Later', fr: 'Plus tard' },
+
+  // ── Version affichée dans les Préférences ────────────────────────────
+  'prefs.version': { en: 'Studio', fr: 'Studio' },
+  'prefs.engineVersion': { en: 'engine', fr: 'moteur' },
+  'tl.focus': {
+    en: 'Focus the preview — hide the timeline (F)',
+    fr: 'Focus sur l’aperçu — masquer la timeline (F)',
+  },
+  'tl.restore': {
+    en: 'Show the timeline again (F)',
+    fr: 'Réafficher la timeline (F)',
+  },
+  'tl.collapsed': { en: 'Timeline hidden', fr: 'Timeline masquée' },
   'tl.resize': { en: 'Resize the timeline', fr: 'Redimensionner la timeline' },
   'tl.mute': { en: 'Mute track', fr: 'Couper le son' },
   'tl.unmute': { en: 'Unmute track', fr: 'Rétablir le son' },
@@ -286,6 +369,22 @@ const STRINGS: Record<string, Entry> = {
     en: 'ffmpeg mixdown to float PCM, LAME encoding. The result is identical on every machine.',
     fr: 'Mixage ffmpeg en PCM flottant, encodage LAME. Le résultat est identique sur toutes les machines.',
   },
+  'export.hintVideoBrowser': {
+    en: 'Encoded in this browser (WebCodecs), frame by frame: 48 kHz audio, same result on every machine running this browser.',
+    fr: 'Encodé dans ce navigateur (WebCodecs), image par image : audio 48 kHz, même résultat sur toute machine équipée de ce navigateur.',
+  },
+  'export.hintAudioBrowser': {
+    en: 'Mixed and encoded in this browser (LAME), 48 kHz stereo.',
+    fr: 'Mixé et encodé dans ce navigateur (LAME), stéréo 48 kHz.',
+  },
+  'export.hintEngineFallback': {
+    en: 'This project uses keyframes, masks or speed changes: it will be rendered in the browser (WebCodecs), because the native engine does not handle them yet.',
+    fr: 'Ce projet utilise des keyframes, des masques ou une vitesse modifiée : il sera rendu dans le navigateur (WebCodecs), le moteur natif ne les gère pas encore.',
+  },
+  'export.audioSkipped': {
+    en: '⚠︎ {n} audio track(s) could not be decoded by this browser: the video is exported without them. Chrome/Edge handle AAC natively; a Chromium build without proprietary codecs cannot.',
+    fr: '⚠︎ {n} piste(s) audio non décodée(s) par ce navigateur : la vidéo est exportée sans elles. Chrome/Edge décodent l’AAC nativement ; une compilation Chromium sans codecs propriétaires en est incapable.',
+  },
   'export.sending': { en: 'Sending the timeline…', fr: 'Envoi de la timeline…' },
   'export.preparing': { en: 'Preparing…', fr: 'Préparation…' },
   'stage.queued': { en: 'Queued…', fr: 'En attente…' },
@@ -304,6 +403,10 @@ const STRINGS: Record<string, Entry> = {
   'export.canceling': { en: 'Cancelling…', fr: 'Annulation…' },
   'export.cancelFailed': { en: 'Could not cancel: {error}', fr: 'Annulation impossible : {error}' },
   'export.noAudio': { en: 'no audio', fr: 'sans audio' },
+  'export.encoderUnsupported': {
+    en: 'This browser cannot encode {format} at {width}×{height}. Choose a lower resolution, or WebM (VP9) which often handles 4K where H.264 does not.',
+    fr: 'Ce navigateur ne sait pas encoder le {format} en {width}×{height}. Choisissez une résolution inférieure, ou WebM (VP9), qui gère souvent la 4K là où le H.264 échoue.',
+  },
   'export.size': { en: '{n} MB', fr: '{n} Mo' },
   'export.detailsAudio': { en: '{size} · {time} · 48 kHz stereo', fr: '{size} · {time} · 48 kHz stéréo' },
   'export.detailsVideo': {
@@ -334,6 +437,20 @@ const STRINGS: Record<string, Entry> = {
   'prefs.engine': { en: 'Engine: {info}', fr: 'Moteur : {info}' },
   'engine.on': { en: 'engine', fr: 'moteur' },
   'engine.off': { en: 'offline', fr: 'hors ligne' },
+  'engine.local': { en: 'browser', fr: 'navigateur' },
+  'engine.localTitle': {
+    en: 'No Rust engine: import and export run in this browser (WebCodecs).',
+    fr: 'Aucun moteur Rust : l’import et l’export se font dans ce navigateur (WebCodecs).',
+  },
+  'export.browserHint': {
+    en: 'Encoding happens in your browser — keep this tab open until it finishes.',
+    fr: 'L’encodage se fait dans votre navigateur — gardez cet onglet ouvert jusqu’à la fin.',
+  },
+  'export.browserStart': { en: 'Encoding in the browser…', fr: 'Encodage dans le navigateur…' },
+  'export.browserUnsupported': {
+    en: 'This browser cannot encode {format}. Use a recent Chrome, Edge or Firefox.',
+    fr: 'Ce navigateur ne sait pas encoder en {format}. Utilisez un Chrome, Edge ou Firefox récent.',
+  },
   'engine.fontOk': { en: 'font OK', fr: 'police OK' },
   'prefs.engineOff': {
     en: 'Rust engine unreachable — run `cuttheflow serve`.',
@@ -349,15 +466,11 @@ const STRINGS: Record<string, Entry> = {
   'help.close': { en: 'Close', fr: 'Fermer' },
 
   // ── Messages ─────────────────────────────────────────────────────────
-  'toast.audioTrackOnly': {
-    en: 'This audio track only accepts audio files.',
-    fr: 'Cette piste audio n’accepte que des fichiers audio.',
-  },
-  'toast.audioNeedsAudioTrack': {
-    en: 'An audio file goes on an audio track.',
-    fr: 'Un fichier audio va sur une piste audio.',
-  },
   'toast.placed': { en: '{name} placed on {track}', fr: '{name} posé sur {track}' },
+  'toast.placedNewTrack': {
+    en: '{name} placed on {track} (new track)',
+    fr: '{name} posé sur {track} (nouvelle piste)',
+  },
   'toast.mediaMissing': {
     en: '{n} project media are missing from the engine: import them again.|{n} project media are missing from the engine: import them again.',
     fr: '{n} média(s) du projet sont absents du moteur : réimportez-les.|{n} média(s) du projet sont absents du moteur : réimportez-les.',
@@ -440,8 +553,15 @@ const STRINGS: Record<string, Entry> = {
   'sc.rect': { en: 'Add a rectangle', fr: 'Ajouter un rectangle' },
   'sc.ellipse': { en: 'Add an ellipse', fr: 'Ajouter une ellipse' },
   'sc.snap': { en: 'Toggle snapping', fr: 'Activer / désactiver l’accrochage' },
+  'sc.focus': {
+    en: 'Focus the preview / bring the timeline back',
+    fr: 'Focus sur l’aperçu / réafficher la timeline',
+  },
   'sc.zoom': { en: 'Zoom the timeline in / out', fr: 'Zoomer / dézoomer la timeline' },
+  'sc.fitTimeline': { en: 'Fit the whole edit in the window', fr: 'Afficher tout le montage' },
   'sc.fit': { en: 'Fit the preview to the window', fr: 'Ajuster l’aperçu à la fenêtre' },
+  'sc.undo': { en: 'Undo the last edit', fr: 'Annuler la dernière action' },
+  'sc.redo': { en: 'Redo the last undone edit', fr: 'Rétablir la dernière action annulée' },
   'sc.import': { en: 'Import media', fr: 'Importer des médias' },
   'sc.open': { en: 'Open a project', fr: 'Ouvrir un projet' },
   'sc.save': { en: 'Save the project', fr: 'Enregistrer le projet' },

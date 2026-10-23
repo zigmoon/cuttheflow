@@ -20,8 +20,6 @@ import BrandMark from '../components/BrandMark.astro';
     <header class="topbar">
       <div class="brand" title="CUT THE FLOW">
         <BrandMark class="brand-logo" />
-        <span class="brand-sep" aria-hidden="true"></span>
-        <span class="brand-word">Studio</span>
       </div>
 
       <nav class="topbar-actions" aria-label="Fichier" data-i18n-aria="file.menu">
@@ -33,6 +31,13 @@ import BrandMark from '../components/BrandMark.astro';
         </button>
         <button class="tb-btn" id="btn-save" data-i18n-title="file.saveTitle">
           <svg viewBox="0 0 24 24"><use href="#i-save"></use></svg><span data-i18n="file.save">Save</span>
+        </button>
+        <span class="topbar-sep" aria-hidden="true"></span>
+        <button class="tb-icon" id="btn-undo" disabled data-i18n-title="edit.undoTitle" data-i18n-aria="edit.undo">
+          <svg viewBox="0 0 24 24"><use href="#i-undo"></use></svg>
+        </button>
+        <button class="tb-icon" id="btn-redo" disabled data-i18n-title="edit.redoTitle" data-i18n-aria="edit.redo">
+          <svg viewBox="0 0 24 24"><use href="#i-redo"></use></svg>
         </button>
       </nav>
 
@@ -80,18 +85,10 @@ import BrandMark from '../components/BrandMark.astro';
           </button>
         </div>
 
-        <div class="sidebar-scroll">
-          <button class="drop-zone" id="dropZone" type="button" data-i18n-title="media.dropTitle">
-            <svg viewBox="0 0 24 24" class="drop-icon"><use href="#i-import"></use></svg>
-            <strong data-i18n="media.drop">Drop your media</strong>
-            <small data-i18n="media.formats">MP4 · MOV · WebM · MP3 · WAV · PNG</small>
-          </button>
-          <div class="media-list" id="mediaList" role="list"></div>
-        </div>
-
-        <div class="sidebar-foot">
-          <span class="foot-label" data-i18n="media.insert">Insert</span>
-          <div class="foot-actions">
+        <!-- Titres et formes : en haut du panneau, avant les médias. -->
+        <div class="insert-strip">
+          <span class="strip-label" data-i18n="media.insert">Insert</span>
+          <div class="insert-actions">
             <button class="btn ghost sm" id="btn-insert-text" data-i18n-title="media.textTitle">
               <svg viewBox="0 0 24 24"><use href="#i-text"></use></svg><span data-i18n="media.text">Text</span>
             </button>
@@ -102,6 +99,15 @@ import BrandMark from '../components/BrandMark.astro';
               <svg viewBox="0 0 24 24"><use href="#i-circle"></use></svg><span data-i18n="media.ellipse">Ellipse</span>
             </button>
           </div>
+        </div>
+
+        <div class="sidebar-scroll">
+          <button class="drop-zone" id="dropZone" type="button" data-i18n-title="media.dropTitle">
+            <svg viewBox="0 0 24 24" class="drop-icon"><use href="#i-import"></use></svg>
+            <strong data-i18n="media.drop">Drop your media</strong>
+            <small data-i18n="media.formats">MP4 · MOV · WebM · MP3 · WAV · PNG</small>
+          </button>
+          <div class="media-list" id="mediaList" role="list"></div>
         </div>
       </aside>
 
@@ -141,30 +147,26 @@ import BrandMark from '../components/BrandMark.astro';
             <span data-i18n="transport.snap">Snap</span>
           </label>
 
-          <!-- Les trois boutons sont centrés sur la largeur de la scène, le
-               temps juste en dessous : plus de tirette de position, la timeline
-               fait déjà ce travail (règle et zones vides, cliquer-glisser). -->
-          <div class="transport-center">
-            <div class="transport-buttons">
-              <button class="transport-btn" id="btn-start" data-i18n-title="transport.startTitle" data-i18n-aria="transport.start">
-                <svg viewBox="0 0 24 24"><use href="#i-start"></use></svg>
-              </button>
-              <button class="transport-play" id="btn-play" data-i18n-title="transport.playTitle" data-i18n-aria="transport.play">
-                <svg class="play-icon" viewBox="0 0 24 24"><use href="#i-play"></use></svg>
-                <svg class="pause-icon" viewBox="0 0 24 24"><use href="#i-pause"></use></svg>
-              </button>
-              <button class="transport-btn" id="btn-end" data-i18n-title="transport.endTitle" data-i18n-aria="transport.end">
-                <svg viewBox="0 0 24 24"><use href="#i-end"></use></svg>
-              </button>
-            </div>
-            <div class="transport-clock">
-              <span class="transport-time" id="timeLabel">00:00.000</span>
-              <span class="transport-sep" aria-hidden="true">/</span>
-              <span class="transport-duration" id="durationLabel">00:00.000</span>
-            </div>
+          <!-- Les boutons restent centrés sur la scène, le temps se range en bas
+               à droite : une seule ligne, donc une barre plus basse. -->
+          <div class="transport-buttons">
+            <button class="transport-btn" id="btn-start" data-i18n-title="transport.startTitle" data-i18n-aria="transport.start">
+              <svg viewBox="0 0 24 24"><use href="#i-start"></use></svg>
+            </button>
+            <button class="transport-play" id="btn-play" data-i18n-title="transport.playTitle" data-i18n-aria="transport.play">
+              <svg class="play-icon" viewBox="0 0 24 24"><use href="#i-play"></use></svg>
+              <svg class="pause-icon" viewBox="0 0 24 24"><use href="#i-pause"></use></svg>
+            </button>
+            <button class="transport-btn" id="btn-end" data-i18n-title="transport.endTitle" data-i18n-aria="transport.end">
+              <svg viewBox="0 0 24 24"><use href="#i-end"></use></svg>
+            </button>
           </div>
 
-          <span class="transport-side" aria-hidden="true"></span>
+          <div class="transport-clock">
+            <span class="transport-time" id="timeLabel">00:00.000</span>
+            <span class="transport-sep" aria-hidden="true">/</span>
+            <span class="transport-duration" id="durationLabel">00:00.000</span>
+          </div>
         </div>
       </section>
 
@@ -196,6 +198,11 @@ import BrandMark from '../components/BrandMark.astro';
       <div class="timeline-resizer" id="timelineResizer" data-i18n-title="tl.resize"></div>
 
       <div class="timeline-toolbar">
+        <span class="timeline-collapsed-label" id="timelineCollapsedLabel">
+          <svg viewBox="0 0 24 24"><use href="#i-film"></use></svg>
+          <span data-i18n="tl.collapsed">Timeline hidden</span>
+        </span>
+
         <div class="toolbar-group">
           <button class="btn ghost sm" id="btn-add-video" data-i18n-title="tl.addVideoTitle">
             <svg viewBox="0 0 24 24"><use href="#i-film"></use></svg><span data-i18n="tl.addVideo">Video track</span>
@@ -216,8 +223,17 @@ import BrandMark from '../components/BrandMark.astro';
         </div>
 
         <div class="toolbar-group right">
+          <button class="icon-btn timeline-focus" id="btn-timeline-focus"
+                  data-i18n-title="tl.focus" data-i18n-aria="tl.focus" aria-pressed="false">
+            <svg class="ico-focus" viewBox="0 0 24 24"><use href="#i-stage-focus"></use></svg>
+            <svg class="ico-restore" viewBox="0 0 24 24"><use href="#i-stage-restore"></use></svg>
+          </button>
+          <span class="toolbar-sep" aria-hidden="true"></span>
           <button class="icon-btn" id="btn-zoom-out" data-i18n-title="tl.zoomOut" data-i18n-aria="tl.zoomOut">
             <svg viewBox="0 0 24 24"><use href="#i-zoom-out"></use></svg>
+          </button>
+          <button class="icon-btn" id="btn-zoom-fit" data-i18n-title="tl.fit" data-i18n-aria="tl.fit">
+            <svg viewBox="0 0 24 24"><use href="#i-fit"></use></svg>
           </button>
           <button class="icon-btn" id="btn-zoom-in" data-i18n-title="tl.zoomIn" data-i18n-aria="tl.zoomIn">
             <svg viewBox="0 0 24 24"><use href="#i-zoom-in"></use></svg>
@@ -233,6 +249,14 @@ import BrandMark from '../components/BrandMark.astro';
             <div class="tracks" id="tracks"></div>
             <div class="playhead" id="playhead"></div>
           </div>
+        </div>
+      </div>
+
+      <!-- Timeline repliée : règle fine pleine largeur, façon lecture vidéo. -->
+      <div class="timeline-scrub" id="timelineScrub" data-i18n-title="tl.scrubTitle">
+        <div class="scrub-rail">
+          <div class="scrub-fill" id="scrubFill"></div>
+          <div class="scrub-knob" id="scrubKnob"></div>
         </div>
       </div>
     </section>
@@ -324,6 +348,7 @@ import BrandMark from '../components/BrandMark.astro';
         </div>
 
         <div class="export-summary" id="exportSummary"></div>
+        <div class="export-warn" id="exportEncoderNotice" hidden></div>
 
         <div class="export-progress" id="exportProgress" hidden>
           <div class="progress-bar"><div id="exportProgressFill"></div></div>
@@ -427,6 +452,7 @@ import BrandMark from '../components/BrandMark.astro';
         </div>
 
         <div class="prefs-note" id="prefsEngine"></div>
+        <div class="prefs-note prefs-version" id="prefsVersion"></div>
       </div>
       <footer class="dialog-foot">
         <span class="foot-spacer"></span>
@@ -437,11 +463,22 @@ import BrandMark from '../components/BrandMark.astro';
 
   <div class="toast-host" id="toastHost" aria-live="polite"></div>
 
+  <!-- Mise à jour de la PWA : proposée, jamais imposée (voir sw-register.ts). -->
+  <div class="update-banner" id="updateBanner" hidden role="status" aria-live="polite">
+    <svg class="update-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh"></use></svg>
+    <span class="update-text" id="updateText" data-i18n="sw.ready">A new version is available.</span>
+    <button class="btn primary sm" id="updateReload" data-i18n="sw.reload">Reload</button>
+    <button class="update-dismiss" id="updateDismiss"
+            data-i18n-title="sw.later" data-i18n-aria="sw.later">✕</button>
+  </div>
+
   <input id="fileInput" type="file" multiple accept="video/*,audio/*,image/*" hidden />
   <input id="projectInput" type="file" accept=".json,application/json" hidden />
 
   <script>
     import { boot } from '../scripts/editor';
+    import { registerServiceWorker } from '../scripts/sw-register';
     boot();
+    registerServiceWorker();
   </script>
 </StudioLayout>

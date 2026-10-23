@@ -289,9 +289,13 @@ pub fn build_video_graph(project: &Project, font_available: bool) -> Result<Vide
                         content: style.content.clone(),
                     });
                     let color = normalize_color(&style.color)?;
+                    // La preview multiplie la taille par l'échelle du clip : le
+                    // rendu ffmpeg doit faire de même, sinon un texte agrandi
+                    // dans l'interface sort à sa taille d'origine.
+                    let font_size = style.size * clip.scale.clamp(0.05, 20.0);
                     let mut options = format!(
                         "fontfile={}:textfile={}:fontsize={:.0}:fontcolor={}:x=(w-text_w)*{:.6}:y=(h-text_h)*{:.6}",
-                        FONT_FILE_NAME, file_name, style.size, color, clip.x, clip.y
+                        FONT_FILE_NAME, file_name, font_size, color, clip.x, clip.y
                     );
                     if let Some(box_color) = &style.background {
                         let box_color = normalize_color(box_color)?;
@@ -628,6 +632,9 @@ mod tests {
             effects: Vec::new(),
             transition: None,
             rotation: 0.0,
+            speed: 1.0,
+            keyframes: Vec::new(),
+            mask: None,
         }
     }
 

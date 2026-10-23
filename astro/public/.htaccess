@@ -1,0 +1,48 @@
+# CUT THE FLOW — studio statique servi dans un sous-dossier
+# (app.zigmoon.com/CUTTHEFLOW/). Aucun moteur : import, aperçu et export
+# tournent dans le navigateur.
+#
+# Tout est facultatif et enfermé dans <IfModule> : si l'hébergeur refuse
+# .htaccess (AllowOverride None), Apache l'ignore et le studio fonctionne
+# quand même. Aucune directive « Options » ici : sur un AllowOverride limité
+# elle provoque une erreur 500 sur tout le dossier.
+
+# HTTPS : géré par l'hébergeur (aucune règle de réécriture ici — une directive
+# mod_rewrite refusée par `AllowOverride` ferait échouer tout le dossier en 500).
+# Rappel : l'export utilise WebCodecs, indisponible hors contexte sécurisé.
+
+# Le manifeste PWA n'est pas un type connu d'Apache : sans cela il est servi en
+# application/octet-stream et le navigateur ignore l'installation.
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+  AddType font/woff2 .woff2
+  AddType image/svg+xml .svg
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  # `_astro/` contient des noms hachés : cache long sans risque.
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType application/manifest+json "access plus 1 hour"
+  # La page elle-même reste toujours fraîche (nouveau build = nouveau hash).
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  # Le service worker doit être relu à chaque visite : un cache d'un an
+  # figerait la version installée chez les visiteurs.
+  <FilesMatch "^service-worker\.js$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>

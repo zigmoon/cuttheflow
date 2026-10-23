@@ -55,6 +55,45 @@ export interface Effect {
   amount: number;
 }
 
+/** Propriétés animables par keyframes. */
+export type KeyframeProp = 'opacity' | 'scale' | 'x' | 'y' | 'rotation' | 'volume';
+
+export type Easing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+
+/**
+ * Point d'animation d'une propriété.
+ *
+ * `time_us` est **local au clip** (0 = début de la fenêtre, pas de la
+ * timeline) : déplacer un clip sur la timeline ne décale donc jamais ses
+ * animations. C'est le comportement attendu, et cela évite de réécrire toutes
+ * les clés à chaque glissement.
+ */
+export interface Keyframe {
+  prop: KeyframeProp;
+  time_us: number;
+  value: number;
+  /** Courbe appliquée jusqu'à la clé suivante. */
+  easing: Easing;
+}
+
+/**
+ * Masque de composition, exprimé en fractions du canevas (0.5 = centre).
+ *
+ * Il s'applique dans l'espace du cadre, après les transformations du clip :
+ * un zoom ne déplace donc pas le masque, comme dans un NLE classique.
+ */
+export interface Mask {
+  kind: 'rect' | 'ellipse';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Adoucissement du bord, en fraction de la petite dimension. */
+  feather: number;
+  /** Inverse le masque : la zone définie devient un trou. */
+  invert: boolean;
+}
+
 export interface Transition {
   kind: TransitionKind;
   duration_us: number;
@@ -81,6 +120,10 @@ export interface Clip {
   effects?: Effect[];
   transition?: Transition | null;
   rotation: number;
+  /** Vitesse de lecture : 1 = temps réel, 2 = deux fois plus rapide. */
+  speed: number;
+  keyframes?: Keyframe[];
+  mask?: Mask | null;
 }
 
 export interface Track {
@@ -184,6 +227,134 @@ export function clipEnd(clip: Clip): number {
   return clip.start_us + clip.duration_us;
 }
 
+/** Vitesse bornée : le moteur d'export et ffmpeg n'acceptent pas l'infini. */
+export const MIN_SPEED = 0.25;
+export const MAX_SPEED = 4;
+
+export function clipSpeed(clip: Clip): number {
+  const value = Number(clip.speed);
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  return clamp(value, MIN_SPEED, MAX_SPEED);
+}
+
+/** Valeur statique d'une propriété, quand aucune clé n'est posée. */
+function staticValue(clip: Clip, prop: KeyframeProp): number {
+  switch (prop) {
+    case 'opacity':
+      return clip.opacity;
+    case 'scale':
+      return clip.scale;
+    case 'x':
+      return clip.x;
+    case 'y':
+      return clip.y;
+    case 'rotation':
+      return clip.rotation;
+    case 'volume':
+      return clip.volume;
+    default:
+      return 0;
+  }
+}
+
+export const KEYFRAME_PROPS: KeyframeProp[] = ['opacity', 'scale', 'x', 'y', 'rotation', 'volume'];
+
+/** Clés d'une propriété, triées et dédoublonnées par instant (la dernière gagne). */
+export function keyframesFor(clip: Clip, prop: KeyframeProp): Keyframe[] {
+  const all = (clip.keyframes ?? []).filter((key) => key.prop === prop);
+  if (all.length < 2) return all;
+  const byTime = new Map<number, Keyframe>();
+  for (const key of all) byTime.set(Math.round(key.time_us), key);
+  return [...byTime.values()].sort((a, b) => a.time_us - b.time_us);
+}
+
+function ease(t: number, easing: Easing): number {
+  const x = clamp(t, 0, 1);
+  switch (easing) {
+    case 'ease-in':
+      return x * x;
+    case 'ease-out':
+      return 1 - (1 - x) * (1 - x);
+    case 'ease-in-out':
+      return x < 0.5 ? 2 * x * x : 1 - ((-2 * x + 2) ** 2) / 2;
+    default:
+      return x;
+  }
+}
+
+/**
+ * Valeur d'une propriété au temps **local** donné.
+ *
+ * Hors de la plage des clés, on tient la premiere/derniere valeur (pas
+ * d'extrapolation) : une animation ne doit jamais partir en vrille si le clip
+ * est rallongé après coup.
+ */
+export function valueAt(clip: Clip, prop: KeyframeProp, localUs: number): number {
+  const keys = keyframesFor(clip, prop);
+  if (!keys.length) return staticValue(clip, prop);
+  if (localUs <= keys[0].time_us) return keys[0].value;
+  const last = keys[keys.length - 1];
+  if (localUs >= last.time_us) return last.value;
+  for (let index = 0; index < keys.length - 1; index += 1) {
+    const from = keys[index];
+    const to = keys[index + 1];
+    if (localUs >= from.time_us && localUs <= to.time_us) {
+      const span = to.time_us - from.time_us;
+      const ratio = span > 0 ? (localUs - from.time_us) / span : 0;
+      const eased = ease(ratio, from.easing);
+      return from.value + (to.value - from.value) * eased;
+    }
+  }
+  return last.value;
+}
+
+/** Instant de la source correspondant à un temps local, à la vitesse du clip. */
+export function sourceTimeAt(clip: Clip, localUs: number): number {
+  return clip.source_start_us + localUs * clipSpeed(clip);
+}
+
+/** Durée de source consommée par la fenêtre du clip. */
+export function sourceSpan(clip: Clip): number {
+  return clip.duration_us * clipSpeed(clip);
+}
+
+export function hasKeyframes(clip: Clip): boolean {
+  return (clip.keyframes?.length ?? 0) > 0;
+}
+
+/** Vrai si le projet utilise une fonction que le moteur Rust ne sait pas rendre. */
+export function needsBrowserRender(project: Project): boolean {
+  for (const track of project.tracks) {
+    for (const clip of track.clips) {
+      if (hasKeyframes(clip)) return true;
+      if (clip.mask) return true;
+      if (clipSpeed(clip) !== 1) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Applique une vitesse en conservant la portion de source jouée.
+ *
+ * Sans cela, passer de 1× à 2× garderait la même fenêtre et n'afficherait que
+ * la première moitié du plan : l'utilisateur croit avoir accéléré, il a rogné.
+ */
+export function applySpeed(clip: Clip, media: Media | undefined, speed: number): void {
+  const next = clamp(speed, MIN_SPEED, MAX_SPEED);
+  const previous = clipSpeed(clip);
+  if (Math.abs(next - previous) < 1e-6) return;
+  const span = clip.duration_us * previous;
+  let duration = Math.round(span / next);
+  if (media && (clip.type === 'video' || clip.type === 'audio')) {
+    const available = Math.max(MIN_CLIP_US, media.duration_us - clip.source_start_us);
+    // La source disponible ne peut pas être dépassée : on plafonne la fenêtre.
+    if (span > available) duration = Math.round(available / next);
+  }
+  clip.speed = next;
+  clip.duration_us = Math.max(MIN_CLIP_US, quantize(duration));
+}
+
 export function activeClip(track: Track, timeUs: number): Clip | undefined {
   let found: Clip | undefined;
   for (const clip of track.clips) {
@@ -254,6 +425,9 @@ function baseClip(prefix: string, type: ClipKind, startUs: number, durationUs: n
     effects: [],
     transition: null,
     rotation: 0,
+    speed: 1,
+    keyframes: [],
+    mask: null,
   };
 }
 
@@ -312,6 +486,8 @@ export function duplicateClip(clip: Clip): Clip {
     shape: clip.shape ? { ...clip.shape } : null,
     effects: clip.effects ? clip.effects.map((effect) => ({ ...effect })) : [],
     transition: clip.transition ? { ...clip.transition } : null,
+    keyframes: (clip.keyframes ?? []).map((key) => ({ ...key })),
+    mask: clip.mask ? { ...clip.mask } : null,
   };
 }
 
@@ -403,6 +579,37 @@ function normalizeClip(raw: Clip): Clip {
         }
       : null,
     rotation: clamp(Number(raw.rotation) || 0, -360, 360),
+    speed: clamp(numberOr(raw.speed, 1), MIN_SPEED, MAX_SPEED),
+    keyframes: Array.isArray(raw.keyframes)
+      ? raw.keyframes
+          .filter(
+            (key) =>
+              key &&
+              KEYFRAME_PROPS.includes(key.prop as KeyframeProp) &&
+              Number.isFinite(Number(key.time_us)) &&
+              Number.isFinite(Number(key.value)),
+          )
+          .slice(0, 400)
+          .map((key) => ({
+            prop: key.prop,
+            time_us: Math.max(0, Math.round(Number(key.time_us))),
+            value: Number(key.value),
+            easing: (['linear', 'ease-in', 'ease-out', 'ease-in-out'].includes(String(key.easing))
+              ? key.easing
+              : 'linear') as Easing,
+          }))
+      : [],
+    mask: raw.mask && raw.mask.kind
+      ? {
+          kind: raw.mask.kind === 'ellipse' ? 'ellipse' : 'rect',
+          x: clamp(numberOr(raw.mask.x, 0.5), -1, 2),
+          y: clamp(numberOr(raw.mask.y, 0.5), -1, 2),
+          width: clamp(numberOr(raw.mask.width, 0.4), 0.01, 2),
+          height: clamp(numberOr(raw.mask.height, 0.4), 0.01, 2),
+          feather: clamp(numberOr(raw.mask.feather, 0), 0, 1),
+          invert: Boolean(raw.mask.invert),
+        }
+      : null,
   };
 }
 
@@ -483,6 +690,10 @@ export function resolvePlacements(project: Project): Map<string, Placement> {
 
       placements[index].start_us -= d;
       placements[index].source_start_us -= d;
+      // Même règle que `plan.rs` : la fenêtre recule de `d` et s'allonge de
+      // `d`, donc le point de sortie ne bouge pas et aucun trou n'apparaît
+      // avant le clip suivant.
+      placements[index].duration_us += d;
       placements[index].dissolve_us = d;
       placements[index].fade_in_us = Math.max(placements[index].fade_in_us, d);
     }

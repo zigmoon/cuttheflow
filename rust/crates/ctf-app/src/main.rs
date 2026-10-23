@@ -181,6 +181,15 @@ fn export_command(args: &[String]) -> Result<(), String> {
     }
 
     project.validate()?;
+    for track in &project.tracks {
+        for clip in &track.clips {
+            if let Some(feature) = clip.needs_browser_render() {
+                return Err(format!(
+                    "ce projet utilise « {feature} », que le moteur natif ne rend pas encore — exportez-le depuis le navigateur"
+                ));
+            }
+        }
+    }
     let ffmpeg = Ffmpeg::discover()?;
     let mut options = ExportOptions::new(&output, project.export.format);
     options.crf = project.export.crf;
@@ -241,8 +250,14 @@ fn serve(args: &[String]) -> Result<(), String> {
         index += 1;
     }
 
-    let ffmpeg = Ffmpeg::discover()?;
-    server::run(ffmpeg, options)
+    // ffmpeg manquant ne doit plus être fatal : le studio sert l'interface en
+    // mode navigateur (WebCodecs) et l'annonce. Un utilisateur qui n'a jamais
+    // installé ffmpeg obtient un éditeur qui marche, pas une erreur au lancement.
+    let (ffmpeg, ffmpeg_error) = match Ffmpeg::discover() {
+        Ok(tool) => (Some(tool), None),
+        Err(error) => (None, Some(error)),
+    };
+    server::run(ffmpeg, ffmpeg_error, options)
 }
 
 #[allow(dead_code)]

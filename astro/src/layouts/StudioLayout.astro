@@ -8,8 +8,18 @@ interface Props {
 
 const {
   title = 'CUT THE FLOW — Editing studio',
-  description = "CUT THE FLOW: multitrack video editing, effects, transitions and shapes. Local import, MP4/WebM/MP3 export through a deterministic Rust engine. Windows, macOS, Linux.",
+  description = "CUT THE FLOW: multitrack video editing, effects, transitions and shapes. Local import, MP4/WebM/MP3 export in the browser or through the deterministic Rust engine.",
 } = Astro.props;
+
+/** Base du site, sous-dossier compris (`/CUTTHEFLOW/`), toujours avec un `/` final. */
+const rawBase = import.meta.env.BASE_URL;
+const base = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
+
+// URL absolues : les robots de partage (Facebook, X, LinkedIn, Slack) ne
+// résolvent pas de façon fiable un `og:image` relatif.
+const site = Astro.site ?? new URL('https://app.zigmoon.com');
+const pageUrl = new URL(base, site).toString();
+const socialImage = new URL(`${base}img/opengraph.png`, site).toString();
 ---
 
 <!doctype html>
@@ -23,16 +33,39 @@ const {
     <title>{title}</title>
 
     <!-- Identity: the original v1 files, unchanged. -->
-    <link rel="icon" type="image/svg+xml" href="/img/CUT_THE_FLOW_b.svg" sizes="any" />
-    <link rel="icon" type="image/png" href="/img/icon-192.png" sizes="192x192" />
-    <link rel="shortcut icon" href="/img/CUT_THE_FLOW_b.svg" />
-    <link rel="apple-touch-icon" href="/img/apple-touch-icon.png" sizes="180x180" />
-    <link rel="mask-icon" href="/img/CUT_THE_FLOW_b.svg" color="#000000" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href={`${base}img/CUT_THE_FLOW_b.svg`} sizes="any" />
+    <link rel="icon" type="image/png" href={`${base}img/icon-192.png`} sizes="192x192" />
+    <link rel="shortcut icon" href={`${base}img/CUT_THE_FLOW_b.svg`} />
+    <link rel="apple-touch-icon" href={`${base}img/apple-touch-icon.png`} sizes="180x180" />
+    <link rel="mask-icon" href={`${base}img/CUT_THE_FLOW_b.svg`} color="#000000" />
+    <link rel="manifest" href={`${base}manifest.webmanifest`} />
+
+    <!-- Aperçus de partage : le studio est publié sous /CUTTHEFLOW/, donc les
+         URL d'image suivent `base` et restent absolues pour les robots. -->
+    <link rel="canonical" href={pageUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CUT THE FLOW" />
+    <meta property="og:url" content={pageUrl} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="CUT THE FLOW — browser video editor" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content={pageUrl} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+
+    <!-- Muxage MP4 (mp4box.js) et encodage MP3 (lamejs) : chargés en globaux,
+         uniquement utiles à l'export navigateur, donc hors du bundle. -->
+    <script is:inline src={`${base}vendor/mp4box.all.min.js`} defer></script>
+    <script is:inline src={`${base}vendor/lamejs.min.js`} defer></script>
     <meta name="application-name" content="CUT THE FLOW" />
     <meta name="apple-mobile-web-app-title" content="CUT THE FLOW" />
     <meta name="msapplication-TileColor" content="#000000" />
-    <meta name="msapplication-TileImage" content="/img/icon-192.png" />
+    <meta name="msapplication-TileImage" content={`${base}img/icon-192.png`} />
     <script is:inline>
       // Le thème et la langue sont appliqués AVANT le premier rendu : aucun
       // flash clair, aucun flash français au démarrage. Le studio est sombre et

@@ -93,7 +93,11 @@ struct State {
     media_dir: PathBuf,
     export_dir: PathBuf,
     cache_dir: PathBuf,
-    ffmpeg: Ffmpeg,
+    /// `None` quand ffmpeg est introuvable : le studio sert alors l'interface en
+    /// mode navigateur (WebCodecs) au lieu de refuser de démarrer.
+    ffmpeg: Option<Ffmpeg>,
+    /// Explication lisible de l'absence de ffmpeg, relayée à l'interface.
+    ffmpeg_error: Option<String>,
     ffmpeg_version: String,
     font: Option<PathBuf>,
     media: Mutex<HashMap<String, Media>>,
@@ -120,7 +124,7 @@ struct Job {
     created_ms: u128,
 }
 
-pub fn run(ffmpeg: Ffmpeg, options: ServerOptions) -> Result<(), String> {
+pub fn run(ffmpeg: Option<Ffmpeg>, ffmpeg_error: Option<String>, options: ServerOptions) -> Result<(), String> {
     let root = options.root.clone();
     let media_dir = root.join("media");
     let export_dir = root.join("exports");
@@ -130,7 +134,10 @@ pub fn run(ffmpeg: Ffmpeg, options: ServerOptions) -> Result<(), String> {
     }
     cleanup_exports(&export_dir, EXPORT_HISTORY);
 
-    let ffmpeg_version = ffmpeg.version().unwrap_or_else(|_| "inconnu".into());
+    let ffmpeg_version = ffmpeg
+        .as_ref()
+        .and_then(|tool| tool.version().ok())
+        .unwrap_or_else(|| "absent".into());
     let font = ctf_engine::default_font();
     let media = load_registry(&media_dir);
 
@@ -154,6 +161,7 @@ pub fn run(ffmpeg: Ffmpeg, options: ServerOptions) -> Result<(), String> {
         export_dir,
         cache_dir,
         ffmpeg,
+        ffmpeg_error,
         ffmpeg_version,
         font,
         media: Mutex::new(media),
@@ -166,7 +174,14 @@ pub fn run(ffmpeg: Ffmpeg, options: ServerOptions) -> Result<(), String> {
     println!("CUT THE FLOW — moteur prêt");
     println!("  interface : {url}");
     println!("  données   : {}", state.root.display());
-    println!("  ffmpeg    : {}", state.ffmpeg_version);
+    if state.ffmpeg.is_some() {
+        println!("  ffmpeg    : {}", state.ffmpeg_version);
+    } else {
+        println!("  ffmpeg    : ABSENT — mode navigateur (export WebCodecs)");
+        if let Some(error) = &state.ffmpeg_error {
+            println!("              {error}");
+        }
+    }
     if state.font.is_none() {
         println!("  police    : aucune (clip texte indisponible — définissez CTF_FONT)");
     } else {
@@ -269,17 +284,27 @@ fn handle_connection(state: Arc<State>, stream: TcpStream) -> Result<(), String>
         Some((path, query)) => (path.to_string(), parse_query(query)),
         None => (target.clone(), HashMap::new()),
     };
-    let path = percent_decode(&raw_path);
+    // Le site est compilé pour `app.zigmoon.com/CUTTHEFLOW` : ses liens et ses
+    // appels d'API portent ce préfixe. Le binaire sert la même compilation à la
+    // racine, donc on normalise ici — interface ET API répondent alors sur les
+    // deux formes.
+    let path = strip_web_base(&percent_decode(&raw_path));
 
     if path == "/api/health" {
+        // `ok: false` quand ffmpeg manque : l'interface bascule alors en mode
+        // navigateur (WebCodecs) au lieu de croire le moteur opérationnel et
+        // d'échouer au premier import. Le studio reste pleinement utilisable.
+        let engine = state.ffmpeg.is_some();
         return respond_json(
             &mut reader,
             200,
             &json!({
-                "ok": true,
+                "ok": engine,
                 "app": "cuttheflow",
                 "version": env!("CARGO_PKG_VERSION"),
                 "ffmpeg": state.ffmpeg_version,
+                "engine": engine,
+                "reason": state.ffmpeg_error,
                 "font": state.font.as_ref().map(|p| p.display().to_string()),
                 "media": state.media.lock().unwrap().len(),
                 "port": state.port
@@ -410,7 +435,14 @@ fn import_media(
     }
 
     let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-    let media = match state.ffmpeg.probe(&path, &id, &display_name, size) {
+    let tool = match state.ffmpeg {
+        Some(ref tool) => tool,
+        None => {
+            let _ = fs::remove_file(&path);
+            return respond_json(reader, 503, &json!({"error": needs_ffmpeg(state)}));
+        }
+    };
+    let media = match tool.probe(&path, &id, &display_name, size) {
         Ok(media) => media,
         Err(error) => {
             let _ = fs::remove_file(&path);
@@ -488,12 +520,16 @@ fn serve_thumbnail(state: &Arc<State>, reader: &mut BufReader<TcpStream>, id: &s
     }
     let cache = state.cache_dir.join(format!("{id}.jpg"));
     if !cache.is_file() {
+        let tool = match state.ffmpeg {
+            Some(ref tool) => tool,
+            None => return respond_json(reader, 503, &json!({"error": needs_ffmpeg(state)})),
+        };
         let seek = if media.kind == ctf_core::model::MediaKind::Video && media.duration_us > 2_000_000 {
             "0.5"
         } else {
             "0"
         };
-        let status = std::process::Command::new(&state.ffmpeg.ffmpeg)
+        let status = std::process::Command::new(&tool.ffmpeg)
             .args([
                 "-y",
                 "-hide_banner",
@@ -539,7 +575,11 @@ fn serve_waveform(
         .unwrap_or(800)
         .clamp(64, 4000);
 
-    let output = std::process::Command::new(&state.ffmpeg.ffmpeg)
+    let tool = match state.ffmpeg {
+        Some(ref tool) => tool,
+        None => return respond_json(reader, 503, &json!({"error": needs_ffmpeg(state)})),
+    };
+    let output = std::process::Command::new(&tool.ffmpeg)
         .args([
             "-v",
             "error",
@@ -675,12 +715,36 @@ fn start_export(
         return respond_json(reader, 400, &json!({ "error": error }));
     }
 
+    // Les fonctions de la 2.2 (keyframes, masques, vitesse) ne sont pas rendues
+    // par ffmpeg : mieux vaut refuser franchement que livrer un fichier faux.
+    for track in &project.tracks {
+        for clip in &track.clips {
+            if let Some(feature) = clip.needs_browser_render() {
+                return respond_json(
+                    reader,
+                    409,
+                    &json!({
+                        "error": format!(
+                            "ce projet utilise « {feature} », que le moteur natif ne rend pas encore — exportez-le depuis le navigateur (WebCodecs)"
+                        )
+                    }),
+                );
+            }
+        }
+    }
+
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let counter = state.counter.fetch_add(1, Ordering::Relaxed);
     let job_id = format!("j{stamp:x}{counter:x}");
+    // Un export sans ffmpeg échouerait de toute façon : on refuse tout de suite,
+    // avec le message qui dit quoi faire, plutôt que de créer un job fantôme.
+    let tool = match state.ffmpeg {
+        Some(ref tool) => tool.clone(),
+        None => return respond_json(reader, 503, &json!({"error": needs_ffmpeg(state)})),
+    };
     let format = project.export.format;
     let output = state
         .export_dir
@@ -729,7 +793,7 @@ fn start_export(
             cancel: Some(job_bg.cancel.clone()),
         };
         let result = export(
-            &state_bg.ffmpeg,
+            &tool,
             &project_bg,
             &options,
             |progress| {
@@ -886,8 +950,17 @@ fn serve_path(
     Ok(())
 }
 
-fn respond_json(reader: &mut BufReader<TcpStream>, status: u16, value: &Value) -> Result<(), String> {
-    let body = serde_json::to_vec(value).unwrap_or_else(|_| b"{}".to_vec());
+fn needs_ffmpeg(state: &Arc<State>) -> String {
+    match &state.ffmpeg_error {
+        Some(error) => format!(
+            "ffmpeg est introuvable : cette action passe par le moteur natif. {error}\n\
+             Utilisez l'interface dans le navigateur (export WebCodecs), ou installez ffmpeg."
+        ),
+        None => "ffmpeg est introuvable : cette action passe par le moteur natif.".into(),
+    }
+}
+
+fn respond_json(reader: &mut BufReader<TcpStream>, status: u16, value: &Value) -> Result<(), String> {    let body = serde_json::to_vec(value).unwrap_or_else(|_| b"{}".to_vec());
     respond_bytes(
         reader,
         status,
@@ -1018,6 +1091,17 @@ fn cleanup_exports(export_dir: &Path, keep: usize) {
     files.sort_by(|a, b| b.0.cmp(&a.0));
     for (_, path) in files.into_iter().skip(keep) {
         let _ = fs::remove_file(path);
+    }
+}
+
+/// Préfixe du déploiement web, retiré avant le routage.
+const WEB_BASE: &str = "/CUTTHEFLOW";
+
+fn strip_web_base(path: &str) -> String {
+    match path.strip_prefix(WEB_BASE) {
+        Some("") => "/".to_string(),
+        Some(rest) if rest.starts_with('/') => rest.to_string(),
+        _ => path.to_string(),
     }
 }
 

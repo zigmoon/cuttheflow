@@ -7,15 +7,22 @@
  */
 
 import * as api from './api';
+import { exportInBrowser, type BrowserExportResult } from './export-browser';
 import { applyStatic, getLang, readStoredLang, setLang, t, type Lang } from './i18n';
 import { Preview } from './preview';
 import { TimelineView, type TimelineHost } from './timeline';
+import { APP_VERSION } from './version';
 import {
   EFFECTS,
+  KEYFRAME_PROPS,
+  MAX_SPEED,
+  MIN_SPEED,
   TRANSITIONS,
   US,
+  applySpeed,
   clamp,
   clipEnd,
+  clipSpeed,
   createClip,
   createProject,
   createShapeClip,
@@ -26,17 +33,23 @@ import {
   fps,
   fpsValue,
   formatTimecode,
+  keyframesFor,
   mediaById,
+  needsBrowserRender,
   normalizeProject,
   parseSeconds,
   placeClip,
   quantize,
   timelineEnd,
   uid,
+  valueAt,
 } from './state';
 import type {
   Clip,
+  Easing,
   ExportFormat,
+  KeyframeProp,
+  Mask,
   Media,
   Project,
   ShapeKind,
@@ -49,7 +62,14 @@ const STORAGE_PROJECT = 'ctf2.project';
 const STORAGE_TIME = 'ctf2.time';
 const STORAGE_PREFS = 'ctf2.prefs';
 
-const ZOOM_STEPS = [10, 20, 40, 80, 160, 320, 640];
+/**
+ * Échelles de la timeline, en pixels par seconde. La plage descend volontairement
+ * très bas (0,25 px/s ≈ une heure de montage dans la largeur de l'écran) : sur un
+ * projet long, on a besoin de voir l'ensemble avant de zoomer sur un détail.
+ */
+const ZOOM_STEPS = [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
+const MIN_ZOOM = ZOOM_STEPS[0];
+const MAX_ZOOM = ZOOM_STEPS[ZOOM_STEPS.length - 1];
 
 interface Prefs {
   theme: 'dark' | 'light';
@@ -59,6 +79,7 @@ interface Prefs {
   leftPanel: boolean;
   rightPanel: boolean;
   timelineHeight: number;
+  timelineCollapsed: boolean;
 }
 
 /** Les touches sont identiques partout ; seul le libellé est traduit. */
@@ -74,8 +95,12 @@ const SHORTCUTS: Array<[string, string]> = [
   ['R', 'sc.rect'],
   ['C', 'sc.ellipse'],
   ['N', 'sc.snap'],
+  ['F', 'sc.focus'],
   ['+ / -', 'sc.zoom'],
+  ['Ctrl + Shift + 0', 'sc.fitTimeline'],
   ['Ctrl + 0', 'sc.fit'],
+  ['Ctrl + Z', 'sc.undo'],
+  ['Ctrl + Shift + Z', 'sc.redo'],
   ['Ctrl + I', 'sc.import'],
   ['Ctrl + O', 'sc.open'],
   ['Ctrl + S', 'sc.save'],
@@ -95,7 +120,7 @@ class Editor implements TimelineHost {
   project: Project;
   timeUs = 0;
   selectedClipId: string | null = null;
-  zoom = 80;
+  zoom = 64;
   snapEnabled = true;
 
   private prefs: Prefs;
@@ -109,7 +134,26 @@ class Editor implements TimelineHost {
   private engineSettled = false;
   private engineFfmpeg = '';
   private engineFont = '';
+  /** Version du moteur, telle que rapportée par `/api/health`. */
+  private engineVersion = '';
+  /** `engine` = binaire Rust joignable ; `local` = tout se fait dans le navigateur. */
+  private mode: 'engine' | 'local' = 'local';
+  private browserExport: AbortController | null = null;
   private dropDepth = 0;
+
+  // ── Historique (annuler / rétablir) ───────────────────────────────────
+  // Instantanés JSON du projet : `undo` contient les états *précédents*, le
+  // plus récent en dernier. `lastSnapshot` est toujours l'état du dernier point
+  // de commit ; toute mutation survenue depuis forme donc une seule étape (un
+  // glissement de clip = une annulation, pas soixante).
+  private undoStack: string[] = [];
+  private redoStack: string[] = [];
+  private lastSnapshot = '';
+  private static readonly HISTORY_LIMIT = 50;
+  private static readonly HISTORY_BUDGET = 6_000_000;
+  /** Vrai si le navigateur ne sait pas encoder la combinaison choisie. */
+  private encoderBlocked = false;
+  private encoderCheckToken = 0;
 
   constructor() {
     this.prefs = loadPrefs();
@@ -142,6 +186,9 @@ class Editor implements TimelineHost {
       content: els.timelineContent,
       playhead: els.playhead,
       scroll: els.timelineScroll,
+      scrub: els.timelineScrub,
+      scrubFill: els.scrubFill,
+      scrubKnob: els.scrubKnob,
     });
 
     this.bind();
@@ -154,6 +201,7 @@ class Editor implements TimelineHost {
     this.setStatus(t('status.ready'));
     void this.checkEngine();
     this.restoreFromStorage();
+    this.resetHistory();
     void this.revealStudio();
   }
 
@@ -196,6 +244,7 @@ class Editor implements TimelineHost {
     this.timeline.render();
     this.renderAllPanels();
     this.updateTimeUi();
+    this.recordHistory();
     this.saveSoon();
   }
 
@@ -204,23 +253,170 @@ class Editor implements TimelineHost {
     this.updateDocMeta();
   }
 
-  addMediaToTrack(mediaId: string, trackId: string, startUs: number): void {
+  // ── Historique ──────────────────────────────────────────────────────
+
+  /** Sérialisation de référence : c'est elle qui définit « même état ». */
+  private snapshot(): string {
+    return JSON.stringify(this.project);
+  }
+
+  /**
+   * Enregistre l'état courant comme nouveau point de commit.
+   *
+   * Sans changement réel (curseur déplacé puis remis en place, `input` répété
+   * avec la même valeur…) rien n'est empilé : l'historique ne contient que des
+   * étapes utiles.
+   */
+  private recordHistory(): void {
+    const current = this.snapshot();
+    if (!this.lastSnapshot) {
+      this.lastSnapshot = current;
+      this.updateHistoryUi();
+      return;
+    }
+    if (current === this.lastSnapshot) return;
+    this.undoStack.push(this.lastSnapshot);
+    this.redoStack.length = 0;
+    this.trimHistory();
+    this.lastSnapshot = current;
+    this.updateHistoryUi();
+  }
+
+  /** Plafond en nombre d'étapes ET en octets : un gros projet ne mange pas la RAM. */
+  private trimHistory(): void {
+    while (this.undoStack.length > Editor.HISTORY_LIMIT) this.undoStack.shift();
+    let total = 0;
+    for (const entry of this.undoStack) total += entry.length;
+    while (this.undoStack.length > 1 && total > Editor.HISTORY_BUDGET) {
+      total -= this.undoStack.shift()!.length;
+    }
+  }
+
+  /**
+   * Oublie l'historique. Appelé quand le projet est remplacé (nouveau projet,
+   * ouverture de fichier) ou quand une étape n'est plus rejouable — la
+   * suppression d'un média efface son blob d'IndexedDB, donc l'annuler
+   * ramènerait un clip sans source.
+   */
+  private resetHistory(): void {
+    this.undoStack.length = 0;
+    this.redoStack.length = 0;
+    this.lastSnapshot = this.snapshot();
+    this.updateHistoryUi();
+  }
+
+  undo(): void {
+    // Une saisie en cours (champ non validé, curseur relâché depuis < 700 ms)
+    // devient une étape à part entière : Ctrl+Z doit reculer d'un cran, pas
+    // sauter par-dessus la frappe en cours.
+    this.recordHistory();
+    const previous = this.undoStack.pop();
+    if (!previous) {
+      this.setStatus(t('history.nothing'));
+      return;
+    }
+    this.redoStack.push(this.lastSnapshot);
+    this.applySnapshot(previous);
+    this.setStatus(t('history.undone'));
+  }
+
+  redo(): void {
+    this.recordHistory();
+    const next = this.redoStack.pop();
+    if (!next) {
+      this.setStatus(t('history.nothing'));
+      return;
+    }
+    this.undoStack.push(this.lastSnapshot);
+    this.applySnapshot(next);
+    this.setStatus(t('history.redone'));
+  }
+
+  private applySnapshot(json: string): void {
+    this.project = JSON.parse(json) as Project;
+    this.lastSnapshot = json;
+    if (this.selectedClipId && !findClip(this.project, this.selectedClipId)) {
+      this.selectedClipId = null;
+    }
+    this.timeUs = clamp(this.timeUs, 0, Math.max(0, timelineEnd(this.project)));
+    this.preview.setProject(this.project);
+    this.preview.seek(this.timeUs);
+    this.timeline.render();
+    this.syncProjectUi();
+    this.renderMediaList();
+    this.renderAllPanels();
+    this.updateTimeUi();
+    this.updateHistoryUi();
+    this.saveSoon();
+  }
+
+  private updateHistoryUi(): void {
+    els.btnUndo.disabled = this.undoStack.length === 0;
+    els.btnRedo.disabled = this.redoStack.length === 0;
+  }
+
+  /**
+   * Pose un média sur la timeline.
+   *
+   * Deux gestes, deux règles :
+   *
+   * - **Dépôt depuis le chutier** (`newTrack`) : on construit **toujours** une
+   *   piste neuve du type du média, insérée à la ligne survolée, et le clip
+   *   tombe exactement à l'instant du dépôt. C'est le geste « poser une nouvelle
+   *   couche ici ».
+   * - **Ajout par clic, import** : on réutilise la première piste compatible, le
+   *   clip se décale après ce qui gêne. C'est le geste « empiler à la suite ».
+   */
+  addMediaToTrack(
+    mediaId: string,
+    trackId: string | null,
+    startUs: number,
+    options: { newTrack?: boolean } = {},
+  ): void {
     const media = mediaById(this.project, mediaId);
-    const track = this.project.tracks.find((candidate) => candidate.id === trackId);
-    if (!media || !track) return;
-    if (track.kind === 'audio' && media.kind !== 'audio') {
-      this.toast(t('toast.audioTrackOnly'), 'error');
-      return;
+    if (!media) return;
+    const droppedIndex = trackId
+      ? this.project.tracks.findIndex((candidate) => candidate.id === trackId)
+      : -1;
+    const kind: TrackKind = media.kind === 'audio' ? 'audio' : 'video';
+
+    let track: Track | undefined;
+    let created = false;
+    if (options.newTrack) {
+      // Insertion à la ligne survolée ; sous la dernière piste, on empile à la
+      // fin — il n'y a pas de ligne pour dire « ici ».
+      track = this.addTrack(kind, droppedIndex >= 0 ? droppedIndex : this.project.tracks.length);
+      created = true;
+    } else {
+      const existing = firstTrackFor(this.project, media);
+      if (existing) {
+        track = existing;
+      } else {
+        track = this.addTrack(kind, this.project.tracks.length);
+        created = true;
+      }
     }
-    if (track.kind === 'video' && media.kind === 'audio') {
-      this.toast(t('toast.audioNeedsAudioTrack'), 'error');
-      return;
-    }
+
     const clip = createClip(media, startUs);
-    placeClip(track, clip, startUs);
+    if (created) {
+      // Piste neuve : le clip reste pile là où on l'a lâché. Passer par
+      // `placeClip` le ferait glisser après la dernière séquence si un clip
+      // traînait plus loin — exactement ce qu'on ne veut pas.
+      clip.start_us = quantize(Math.max(0, startUs));
+      track.clips.push(clip);
+      track.clips.sort((a, b) => a.start_us - b.start_us);
+    } else {
+      placeClip(track, clip, startUs);
+    }
     this.selectedClipId = clip.id;
     this.afterEdit();
-    this.setStatus(t('toast.placed', { name: media.name, track: track.name }));
+
+    const message = t(created ? 'toast.placedNewTrack' : 'toast.placed', {
+      name: media.name,
+      track: track.name,
+    });
+    this.setStatus(message);
+    if (created) this.toast(message, 'ok');
   }
 
   toggleTrackMute(trackId: string): void {
@@ -262,6 +458,10 @@ class Editor implements TimelineHost {
     els.btnNew.addEventListener('click', () => this.newProject());
     els.btnOpen.addEventListener('click', () => this.openProjectFile());
     els.btnSave.addEventListener('click', () => this.saveProjectFile());
+
+    // Historique
+    els.btnUndo.addEventListener('click', () => this.undo());
+    els.btnRedo.addEventListener('click', () => this.redo());
 
     // Import : le panneau médias et la zone de dépôt (plus Ctrl+I)
     for (const button of [els.btnImportSide]) {
@@ -316,9 +516,13 @@ class Editor implements TimelineHost {
 
     els.btnZoomIn.addEventListener('click', () => this.changeZoom(1));
     els.btnZoomOut.addEventListener('click', () => this.changeZoom(-1));
+    els.btnZoomFit.addEventListener('click', () => this.fitTimeline());
+    // Ranger la timeline : la scène prend la place, la barre reste pour revenir.
+    els.btnTimelineFocus.addEventListener('click', () => this.toggleTimelineFocus());
 
     els.timelineResizer.addEventListener('pointerdown', (event) => {
       event.preventDefault();
+      if (this.prefs.timelineCollapsed) return;
       const startY = event.clientY;
       const startHeight = els.shell.getBoundingClientRect().bottom -
         els.timelinePanel.getBoundingClientRect().top;
@@ -335,6 +539,8 @@ class Editor implements TimelineHost {
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
     });
+    // Double-clic sur la poignée : même repli que le bouton de la barre.
+    els.timelineResizer.addEventListener('dblclick', () => this.toggleTimelineFocus());
 
     // Onglets d'outils
     document.querySelectorAll<HTMLButtonElement>('.segmented [data-tab]').forEach((button) => {
@@ -472,6 +678,7 @@ class Editor implements TimelineHost {
       `${clamp(this.prefs.timelineHeight || 306, 170, 720)}px`,
     );
     this.applyPanelVisibility();
+    this.applyTimelineState();
   }
 
   /**
@@ -494,6 +701,7 @@ class Editor implements TimelineHost {
       this.updateTimeUi();
       this.timeline?.render();
       this.updateEngineBadge();
+      this.applyTimelineState();
       if (els.prefsModal.classList.contains('is-open')) this.openPreferences();
       if (els.exportModal.classList.contains('is-open')) this.updateExportSummary();
     }
@@ -531,6 +739,24 @@ class Editor implements TimelineHost {
     if (this.preview.fitMode) window.setTimeout(() => this.fitPreview(), 0);
   }
 
+  /** Replie la timeline sur sa barre d'outils pour donner la scène à l'aperçu. */
+  private toggleTimelineFocus(): void {
+    this.prefs.timelineCollapsed = !this.prefs.timelineCollapsed;
+    this.applyTimelineState();
+    this.persistPrefs();
+    if (this.preview.fitMode) window.setTimeout(() => this.fitPreview(), 0);
+  }
+
+  private applyTimelineState(): void {
+    const collapsed = this.prefs.timelineCollapsed;
+    els.shell.dataset.timeline = collapsed ? 'off' : 'on';
+    els.btnTimelineFocus.classList.toggle('is-active', collapsed);
+    els.btnTimelineFocus.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    const label = t(collapsed ? 'tl.restore' : 'tl.focus');
+    els.btnTimelineFocus.title = label;
+    els.btnTimelineFocus.setAttribute('aria-label', label);
+  }
+
   private applyPanelVisibility(): void {
     els.workspace.dataset.left = this.prefs.leftPanel ? 'on' : 'off';
     els.workspace.dataset.right = this.prefs.rightPanel ? 'on' : 'off';
@@ -546,6 +772,10 @@ class Editor implements TimelineHost {
     els.prefsEngine.textContent = this.engineOk
       ? t('prefs.engine', { info: this.engineSummary() })
       : t('prefs.engineOff');
+    // La version affichée est celle du bundle compilé ; celle du moteur vient de
+    // `/api/health`. En mode statique il n'y a pas de moteur, donc pas de ligne.
+    const engine = this.engineOk && this.engineVersion ? ` · ${t('prefs.engineVersion')} ${this.engineVersion}` : '';
+    els.prefsVersion.textContent = `${t('prefs.version')} ${APP_VERSION}${engine}`;
     this.openModal(els.prefsModal);
   }
 
@@ -559,15 +789,30 @@ class Editor implements TimelineHost {
 
   // ── Moteur ──────────────────────────────────────────────────────────
 
+  /**
+   * Détecte le mode. Sans moteur, l'application reste pleinement utilisable :
+   * import, aperçu et export passent par le navigateur (IndexedDB + WebCodecs).
+   */
   private async checkEngine(): Promise<void> {
     try {
       const info = await api.health();
-      this.engineOk = true;
+      this.mode = info.mode;
+      // `ok: false` avec une raison = le serveur répond mais ffmpeg manque. Ce
+      // n'est pas une panne : le studio tourne en mode navigateur, on le dit
+      // calmement au lieu d'afficher une erreur.
+      this.engineOk = info.mode === 'engine';
       this.engineFfmpeg = info.ffmpeg;
       this.engineFont = info.font ?? '';
+      this.engineVersion = info.version ?? '';
       this.updateEngineBadge();
-      const serverMedia = await api.listMedia();
-      this.mergeServerMedia(serverMedia);
+      if (!this.engineOk && info.reason) this.toast(info.reason, 'info');
+      const available = await api.listMedia();
+      this.mergeServerMedia(available);
+      // Les URL d'objet locales arrivent avec la liste : on redessine pour que
+      // le projet restauré s'affiche sans attendre une interaction.
+      this.preview.setProject(this.project);
+      this.timeline.render();
+      this.renderMediaList();
     } catch (error) {
       this.engineOk = false;
       this.updateEngineBadge();
@@ -581,19 +826,25 @@ class Editor implements TimelineHost {
 
   private updateEngineBadge(): void {
     const badge = els.engineBadge;
-    if (this.engineOk) {
-      badge.dataset.state = 'ok';
-      els.engineLabel.textContent = t('engine.on');
-      badge.title = `${this.engineFfmpeg}\n${this.engineFont ? `font: ${this.engineFont}` : 'font: none'}`;
+    if (!this.engineOk) {
+      badge.dataset.state = 'bad';
+      els.engineLabel.textContent = t('engine.off');
+      badge.title = this.engineFfmpeg ? 'Run `cuttheflow serve` then reload the page.' : '';
       return;
     }
-    badge.dataset.state = 'bad';
-    els.engineLabel.textContent = t('engine.off');
-    badge.title = this.engineFfmpeg ? 'Run `cuttheflow serve` then reload the page.' : '';
+    badge.dataset.state = 'ok';
+    if (this.mode === 'local') {
+      els.engineLabel.textContent = t('engine.local');
+      badge.title = t('engine.localTitle');
+      return;
+    }
+    els.engineLabel.textContent = t('engine.on');
+    badge.title = `${this.engineFfmpeg}\n${this.engineFont ? `font: ${this.engineFont}` : 'font: none'}`;
   }
 
   /** Résumé court du moteur, dans la langue courante. */
   private engineSummary(): string {
+    if (this.mode === 'local') return 'WebCodecs';
     const short = this.engineFfmpeg.split(' ').slice(0, 2).join(' ');
     return this.engineFont ? `${short} · ${t('engine.fontOk')}` : short;
   }
@@ -672,7 +923,10 @@ class Editor implements TimelineHost {
 
   private async importFiles(files: File[]): Promise<void> {
     if (!files.length) return;
-    if (!this.engineOk) {
+    // En mode navigateur (site statique ou moteur sans ffmpeg), l'import passe
+    // par IndexedDB : il ne dépend pas du moteur. Seul le mode « engine » a
+    // besoin d'un moteur joignable.
+    if (this.mode === 'engine' && !this.engineOk) {
       this.toast(t('toast.engineOfflineImport'), 'error');
       return;
     }
@@ -730,7 +984,10 @@ class Editor implements TimelineHost {
     } catch {
       // le fichier peut déjà avoir disparu : l'interface reste cohérente
     }
+    // Le blob vient d'être effacé d'IndexedDB : annuler ramènerait un clip sans
+    // source. On repart donc d'un historique neuf plutôt que d'un état cassé.
     this.afterEdit();
+    this.resetHistory();
     this.renderMediaList();
   }
 
@@ -750,6 +1007,7 @@ class Editor implements TimelineHost {
     this.renderAllPanels();
     this.updateTimeUi();
     this.persist();
+    this.resetHistory();
     this.setStatus(t('status.newProject'));
   }
 
@@ -796,6 +1054,7 @@ class Editor implements TimelineHost {
       this.renderAllPanels();
       this.updateTimeUi();
       this.persist();
+      this.resetHistory();
       if (missing > 0) {
         this.toast(t('toast.mediaMissing', { n: missing }), 'error');
       } else {
@@ -843,22 +1102,38 @@ class Editor implements TimelineHost {
     els.statusAutosave.dataset.state = 'saving';
     els.statusAutosaveText.textContent = t('status.saving');
     window.clearTimeout(this.saveTimer);
-    this.saveTimer = window.setTimeout(() => this.persist(), 700);
+    this.saveTimer = window.setTimeout(() => {
+      this.persist();
+      // Les réglages continus (curseurs de piste, intensité d'effet, saisie au
+      // clavier dans les propriétés) ne passent pas par `afterEdit` : ce commit
+      // différé les regroupe en une seule étape d'historique.
+      this.recordHistory();
+    }, 700);
   }
 
   // ── Pistes et clips ─────────────────────────────────────────────────
 
-  private addTrack(kind: TrackKind): Track {
-    const index = this.project.tracks.filter((track) => track.kind === kind).length + 1;
+  private addTrack(kind: TrackKind, index = this.project.tracks.length): Track {
+    const label = kind === 'video' ? 'VIDEO' : 'AUDIO';
+    // Une piste insérée au milieu ne doit pas voler le nom d'une voisine.
+    const taken = new Set(this.project.tracks.map((candidate) => candidate.name));
+    let number = this.project.tracks.filter((candidate) => candidate.kind === kind).length + 1;
+    while (taken.has(`${label} ${number}`)) number += 1;
     const track: Track = {
       id: uid(kind === 'video' ? 'v' : 'a'),
       kind,
-      name: `${kind === 'video' ? 'VIDEO' : 'AUDIO'} ${index}`,
+      name: `${label} ${number}`,
       muted: false,
       volume: 1,
       clips: [],
     };
-    this.project.tracks.push(track);
+    // `splice` et non `push` : une piste créée par un dépôt apparaît **à
+    // l'endroit du dépôt**, comme une ligne insérée dans une liste.
+    this.project.tracks.splice(
+      clamp(Math.round(index), 0, this.project.tracks.length),
+      0,
+      track,
+    );
     this.timeline.render();
     this.saveSoon();
     return track;
@@ -945,18 +1220,24 @@ class Editor implements TimelineHost {
     const { track, clip } = found;
     const cutUs = quantize(this.timeUs);
     const offset = cutUs - clip.start_us;
+    const speed = clipSpeed(clip);
     const right: Clip = {
       ...clip,
       id: uid(clip.type.charAt(0)),
       start_us: cutUs,
       duration_us: clip.duration_us - offset,
-      source_start_us: clip.source_start_us + offset,
+      source_start_us: clip.source_start_us + Math.round(offset * speed),
+      // Les clés sont locales au clip : celles de droite repartent de 0.
+      keyframes: (clip.keyframes ?? [])
+        .filter((key) => key.time_us >= offset)
+        .map((key) => ({ ...key, time_us: key.time_us - offset })),
       fade_in_us: 0,
       transition: clip.transition ? { ...clip.transition } : null,
       effects: clip.effects ? clip.effects.map((effect) => ({ ...effect })) : [],
       text: clip.text ? { ...clip.text } : null,
       shape: clip.shape ? { ...clip.shape } : null,
     };
+    clip.keyframes = (clip.keyframes ?? []).filter((key) => key.time_us < offset);
     clip.duration_us = offset;
     clip.fade_out_us = Math.min(clip.fade_out_us, offset / 2);
     clip.transition = null;
@@ -1028,6 +1309,36 @@ class Editor implements TimelineHost {
     parts.push(fieldRange(t('field.rotation'), 'rotation', clip.rotation, -180, 180, 1, '°'));
     parts.push(fieldRange(t('field.opacity'), 'opacity', clip.opacity * 100, 0, 100, 1, '%'));
 
+    if (clip.type === 'video' || clip.type === 'audio') {
+      const speed = clipSpeed(clip);
+      parts.push(`<div class="section-title">${escapeHtml(t('props.section.speed'))}</div>`);
+      parts.push(`
+        <div class="field">
+          <span>${escapeHtml(t('field.speed'))}</span>
+          <div class="field-row">
+            <input type="range" min="${MIN_SPEED * 100}" max="${MAX_SPEED * 100}" step="5"
+                   data-prop="speed" value="${Math.round(speed * 100)}" />
+            <span class="range-value" data-speed-readout>${speed.toFixed(2)}×</span>
+          </div>
+        </div>
+        <div class="chip-row">
+          ${[0.5, 0.75, 1, 1.5, 2, 4]
+            .map(
+              (preset) =>
+                `<button type="button" class="chip ${Math.abs(preset - speed) < 0.01 ? 'is-on' : ''}"
+                         data-speed="${preset}">${preset}×</button>`,
+            )
+            .join('')}
+        </div>
+        <p class="empty-hint">${escapeHtml(t('speed.hint'))}</p>
+      `);
+    }
+
+    if (['video', 'image', 'text', 'shape'].includes(clip.type)) {
+      parts.push(this.keyframesHtml(clip));
+      parts.push(this.maskHtml(clip));
+    }
+
     if (clip.type === 'video') {
       parts.push(`
         <label class="check-field">
@@ -1087,6 +1398,100 @@ class Editor implements TimelineHost {
       `<button class="btn ghost sm danger" data-action="delete-clip" style="margin-top:4px">${escapeHtml(t('props.deleteClip'))}</button>`,
     );
     els.panelProps.innerHTML = parts.join('');
+  }
+
+  private keyframesHtml(clip: Clip): string {
+    const props = clip.type === 'audio' ? (['volume'] as KeyframeProp[]) : KEYFRAME_PROPS;
+    const parts: string[] = [];
+    parts.push(`<div class="section-title">${escapeHtml(t('props.section.keyframes'))}</div>`);
+    parts.push(`<p class="empty-hint">${escapeHtml(t('kf.hint'))}</p>`);
+    parts.push('<div class="kf-props">');
+    for (const prop of props) {
+      const keys = keyframesFor(clip, prop);
+      parts.push(`
+        <div class="kf-prop-row ${keys.length ? 'is-on' : ''}">
+          <span class="kf-name">${escapeHtml(t(`field.${prop}`))}</span>
+          <span class="kf-count">${keys.length ? escapeHtml(t('kf.count', { n: keys.length })) : '—'}</span>
+          <button type="button" class="btn ghost xs" data-kf-add="${prop}"
+                  title="${escapeHtml(t('kf.add'))}">◆ +</button>
+          ${
+            keys.length
+              ? `<button type="button" class="btn ghost xs danger" data-kf-clear="${prop}"
+                         title="${escapeHtml(t('kf.remove'))}">✕</button>`
+              : ''
+          }
+        </div>
+      `);
+    }
+    parts.push('</div>');
+
+    const all = (clip.keyframes ?? [])
+      .map((key, index) => ({ key, index }))
+      .sort((a, b) => a.key.time_us - b.key.time_us || a.index - b.index);
+    if (all.length) {
+      parts.push('<div class="kf-keys">');
+      for (const entry of all) {
+        const scale = keyframeScale(entry.key.prop);
+        const id = `${entry.key.prop}|${entry.key.time_us}|${entry.index}`;
+        parts.push(`
+          <div class="kf-key">
+            <span class="kf-time">${escapeHtml(formatTimecode(entry.key.time_us))}</span>
+            <span class="kf-name">${escapeHtml(t(`field.${entry.key.prop}`))}</span>
+            <input type="number" class="kf-value" data-kf-value="${id}" step="${scale.step}"
+                   min="${scale.min}" max="${scale.max}"
+                   value="${Math.round(entry.key.value * scale.factor * 100) / 100}" />
+            <span class="kf-unit">${scale.suffix}</span>
+            <select data-kf-easing="${id}" title="${escapeHtml(t('kf.easing'))}">
+              ${(['linear', 'ease-in', 'ease-out', 'ease-in-out'] as Easing[])
+                .map(
+                  (easing) =>
+                    `<option value="${easing}" ${entry.key.easing === easing ? 'selected' : ''}>${escapeHtml(
+                      t(`easing.${easing}`),
+                    )}</option>`,
+                )
+                .join('')}
+            </select>
+            <button type="button" class="btn ghost xs danger" data-kf-del="${id}">✕</button>
+          </div>
+        `);
+      }
+      parts.push('</div>');
+    }
+    return parts.join('');
+  }
+
+  private maskHtml(clip: Clip): string {
+    const mask = clip.mask;
+    const parts: string[] = [];
+    parts.push(`<div class="section-title">${escapeHtml(t('props.section.mask'))}</div>`);
+    parts.push(`
+      <label class="check-field">
+        <span>${escapeHtml(t('mask.enable'))}</span>
+        <input type="checkbox" data-prop="maskOn" ${mask ? 'checked' : ''} />
+      </label>
+    `);
+    if (!mask) return parts.join('');
+    parts.push(`<p class="empty-hint">${escapeHtml(t('mask.hint'))}</p>`);
+    parts.push(`
+      <div class="field"><span>${escapeHtml(t('mask.kind'))}</span>
+        <select data-prop="maskKind">
+          <option value="rect" ${mask.kind === 'rect' ? 'selected' : ''}>${escapeHtml(t('mask.rect'))}</option>
+          <option value="ellipse" ${mask.kind === 'ellipse' ? 'selected' : ''}>${escapeHtml(t('mask.ellipse'))}</option>
+        </select>
+      </div>
+    `);
+    parts.push(fieldRange(t('mask.x'), 'maskX', mask.x * 100, -50, 150, 1, '%'));
+    parts.push(fieldRange(t('mask.y'), 'maskY', mask.y * 100, -50, 150, 1, '%'));
+    parts.push(fieldRange(t('mask.width'), 'maskWidth', mask.width * 100, 1, 100, 1, '%'));
+    parts.push(fieldRange(t('mask.height'), 'maskHeight', mask.height * 100, 1, 100, 1, '%'));
+    parts.push(fieldRange(t('mask.feather'), 'maskFeather', mask.feather * 100, 0, 100, 1, '%'));
+    parts.push(`
+      <label class="check-field">
+        <span>${escapeHtml(t('mask.invert'))}</span>
+        <input type="checkbox" data-prop="maskInvert" ${mask.invert ? 'checked' : ''} />
+      </label>
+    `);
+    return parts.join('');
   }
 
   private renderEffects(): void {
@@ -1261,6 +1666,17 @@ class Editor implements TimelineHost {
       return;
     }
 
+    const kfValue = target.dataset.kfValue;
+    if (kfValue) {
+      this.editKeyframe(kfValue, Number(target.value), null);
+      return;
+    }
+    const kfEasing = target.dataset.kfEasing;
+    if (kfEasing) {
+      this.editKeyframe(kfEasing, null, target.value as Easing);
+      return;
+    }
+
     const property = target.dataset.prop;
     if (!property) return;
     const found = this.currentClip();
@@ -1279,7 +1695,8 @@ class Editor implements TimelineHost {
       case 'duration': {
         let duration = Math.max(100_000, parseSeconds(target.value));
         if ((clip.type === 'video' || clip.type === 'audio') && media) {
-          duration = Math.min(duration, Math.max(100_000, media.duration_us - clip.source_start_us));
+          const available = Math.max(100_000, media.duration_us - clip.source_start_us);
+          duration = Math.min(duration, Math.round(available / clipSpeed(clip)));
         }
         clip.duration_us = duration;
         target.value = (duration / US).toFixed(2);
@@ -1288,8 +1705,9 @@ class Editor implements TimelineHost {
       case 'source': {
         if (!media) break;
         clip.source_start_us = clamp(parseSeconds(target.value), 0, Math.max(0, media.duration_us - 100_000));
-        if (clip.source_start_us + clip.duration_us > media.duration_us) {
-          clip.duration_us = Math.max(100_000, media.duration_us - clip.source_start_us);
+        const span = clip.duration_us * clipSpeed(clip);
+        if (clip.source_start_us + span > media.duration_us) {
+          clip.duration_us = Math.max(100_000, Math.round((media.duration_us - clip.source_start_us) / clipSpeed(clip)));
         }
         target.value = (clip.source_start_us / US).toFixed(2);
         break;
@@ -1319,6 +1737,39 @@ class Editor implements TimelineHost {
         break;
       case 'opacity':
         clip.opacity = clamp(Number(target.value) / 100, 0, 1);
+        break;
+      case 'speed': {
+        const next = clamp(Number(target.value) / 100, MIN_SPEED, MAX_SPEED);
+        applySpeed(clip, media, next);
+        const readout = els.toolsScroll.querySelector<HTMLElement>('[data-speed-readout]');
+        if (readout) readout.textContent = `${clipSpeed(clip).toFixed(2)}×`;
+        break;
+      }
+      case 'maskOn':
+        clip.mask = (target as HTMLInputElement).checked
+          ? ({ kind: 'rect', x: 0.5, y: 0.5, width: 0.5, height: 0.5, feather: 0.05, invert: false } as Mask)
+          : null;
+        break;
+      case 'maskKind':
+        if (clip.mask) clip.mask.kind = target.value === 'ellipse' ? 'ellipse' : 'rect';
+        break;
+      case 'maskX':
+        if (clip.mask) clip.mask.x = clamp(Number(target.value) / 100, -1, 2);
+        break;
+      case 'maskY':
+        if (clip.mask) clip.mask.y = clamp(Number(target.value) / 100, -1, 2);
+        break;
+      case 'maskWidth':
+        if (clip.mask) clip.mask.width = clamp(Number(target.value) / 100, 0.01, 2);
+        break;
+      case 'maskHeight':
+        if (clip.mask) clip.mask.height = clamp(Number(target.value) / 100, 0.01, 2);
+        break;
+      case 'maskFeather':
+        if (clip.mask) clip.mask.feather = clamp(Number(target.value) / 100, 0, 1);
+        break;
+      case 'maskInvert':
+        if (clip.mask) clip.mask.invert = (target as HTMLInputElement).checked;
         break;
       case 'audioMuted':
         clip.audio_muted = (target as HTMLInputElement).checked;
@@ -1374,6 +1825,8 @@ class Editor implements TimelineHost {
       // Les marges de transition dépendent du début, de la durée et du point de
       // sortie : on les rafraîchit sans reconstruire les champs en cours de saisie.
       this.renderTransitions();
+      // Activer un masque (ou changer sa forme) ajoute/retire des champs.
+      if (property === 'maskOn' || property === 'maskKind') this.renderProperties();
       this.saveSoon();
     }
   }
@@ -1382,6 +1835,32 @@ class Editor implements TimelineHost {
     const target = event.target as HTMLElement;
     if (target.closest('[data-action="delete-clip"]')) {
       this.deleteSelected();
+      return;
+    }
+    const speed = target.closest<HTMLElement>('[data-speed]');
+    if (speed?.dataset.speed) {
+      const found = this.currentClip();
+      if (found) {
+        const media = mediaById(this.project, found.clip.media);
+        applySpeed(found.clip, media, Number(speed.dataset.speed));
+        this.afterEdit();
+        this.renderProperties();
+      }
+      return;
+    }
+    const kfAdd = target.closest<HTMLElement>('[data-kf-add]');
+    if (kfAdd?.dataset.kfAdd) {
+      this.addKeyframe(kfAdd.dataset.kfAdd as KeyframeProp);
+      return;
+    }
+    const kfClear = target.closest<HTMLElement>('[data-kf-clear]');
+    if (kfClear?.dataset.kfClear) {
+      this.clearKeyframes(kfClear.dataset.kfClear as KeyframeProp);
+      return;
+    }
+    const kfDel = target.closest<HTMLElement>('[data-kf-del]');
+    if (kfDel?.dataset.kfDel) {
+      this.deleteKeyframe(kfDel.dataset.kfDel);
       return;
     }
     if (target.closest('[data-action="clear-transition"]')) {
@@ -1431,6 +1910,66 @@ class Editor implements TimelineHost {
     this.renderTransitions();
   }
 
+  // ── Keyframes ───────────────────────────────────────────────────────
+
+  /** Pose une clé à la tête de lecture avec la valeur courante de la propriété. */
+  private addKeyframe(prop: KeyframeProp): void {
+    const found = this.currentClip();
+    if (!found) return;
+    const { clip } = found;
+    clip.keyframes = clip.keyframes ?? [];
+    const local = Math.max(0, Math.round(this.timeUs - clip.start_us));
+    const value = valueAt(clip, prop, local);
+    const existing = clip.keyframes.find(
+      (key) => key.prop === prop && Math.abs(key.time_us - local) < 1000,
+    );
+    if (existing) {
+      // Deuxième clic au même endroit : on retire la clé (comportement chrono).
+      clip.keyframes = clip.keyframes.filter((key) => key !== existing);
+    } else {
+      clip.keyframes.push({ prop, time_us: local, value, easing: 'linear' });
+      clip.keyframes.sort((a, b) => a.time_us - b.time_us);
+    }
+    this.afterEdit();
+    this.renderProperties();
+    this.setStatus(t('kf.count', { n: keyframesFor(clip, prop).length }));
+  }
+
+  private clearKeyframes(prop: KeyframeProp): void {
+    const found = this.currentClip();
+    if (!found) return;
+    found.clip.keyframes = (found.clip.keyframes ?? []).filter((key) => key.prop !== prop);
+    this.afterEdit();
+    this.renderProperties();
+  }
+
+  private deleteKeyframe(id: string): void {
+    const found = this.currentClip();
+    if (!found) return;
+    const [prop, time, index] = id.split('|');
+    const list = found.clip.keyframes ?? [];
+    const key = list[Number(index)];
+    if (!key || key.prop !== prop || String(key.time_us) !== time) return;
+    found.clip.keyframes = list.filter((candidate) => candidate !== key);
+    this.afterEdit();
+    this.renderProperties();
+  }
+
+  private editKeyframe(id: string, value: number | null, easing: Easing | null): void {
+    const found = this.currentClip();
+    if (!found) return;
+    const [prop, time, index] = id.split('|');
+    const key = (found.clip.keyframes ?? [])[Number(index)];
+    if (!key || key.prop !== prop || String(key.time_us) !== time) return;
+    if (easing) key.easing = easing;
+    if (value !== null && Number.isFinite(value)) {
+      key.value = value / keyframeScale(key.prop).factor;
+    }
+    this.preview.refresh();
+    this.timeline.updateClipElement(found.clip);
+    this.saveSoon();
+  }
+
   // ── Temps et statut ─────────────────────────────────────────────────
 
   private updateTimeUi(): void {
@@ -1446,7 +1985,7 @@ class Editor implements TimelineHost {
     els.statusFormat.textContent = this.project.export.format.toUpperCase();
     els.statusDuration.textContent = formatTimecode(end);
     els.statusClips.textContent = t('status.clips', { n: clips });
-    els.statusZoom.textContent = `${this.zoom} px/s`;
+    els.statusZoom.textContent = `${this.zoom < 10 ? this.zoom.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') : Math.round(this.zoom)} px/s`;
     els.previewZoomValue.textContent = `${Math.round(this.preview.scale * 100)} %`;
     els.emptyState.hidden = clips > 0;
     els.canvasStack.hidden = clips === 0;
@@ -1457,13 +1996,45 @@ class Editor implements TimelineHost {
   }
 
   private changeZoom(direction: number): void {
-    const index = ZOOM_STEPS.indexOf(this.zoom);
+    const current = this.zoom;
     const next =
-      index === -1
-        ? 80
-        : ZOOM_STEPS[clamp(index + direction, 0, ZOOM_STEPS.length - 1)];
-    this.zoom = next;
+      direction > 0
+        ? ZOOM_STEPS.find((step) => step > current + 0.5)
+        : [...ZOOM_STEPS].reverse().find((step) => step < current - 0.5);
+    if (next === undefined) return;
+    // Repère : le centre de la vue. Sans cela, dézoomer ferait sauter le montage
+    // hors de l'écran à chaque cran.
+    const view = els.timelineScroll;
+    const offset = view.clientWidth / 2;
+    this.setZoomAt(next, ((view.scrollLeft + offset) / current) * US, offset);
+  }
+
+  /**
+   * Zoom molette (Ctrl/⌘ + molette) **centré sur le curseur** : le temps sous la
+   * souris reste sous la souris. Sans cela, le navigateur zoome toute
+   * l'interface — le studio devenait inutilisable après deux coups de molette.
+   */
+  zoomTimeline(factor: number, anchorUs: number, offsetPx: number): void {
+    this.setZoomAt(this.zoom * factor, anchorUs, offsetPx);
+  }
+
+  private setZoomAt(next: number, anchorUs: number, offsetPx: number): void {
+    const value = clamp(next, MIN_ZOOM, MAX_ZOOM);
+    if (Math.abs(value - this.zoom) < 0.01) return;
+    this.zoom = value;
     this.timeline.render();
+    els.timelineScroll.scrollLeft = Math.max(0, (anchorUs / US) * value - offsetPx);
+    this.updateStatusBar();
+  }
+
+  /** Cadre tout le montage dans la largeur visible (bouton de zoom, Ctrl+Maj+0). */
+  fitTimeline(): void {
+    const view = els.timelineScroll;
+    const end = Math.max(US, timelineEnd(this.project));
+    const usable = Math.max(120, view.clientWidth - 24);
+    this.zoom = clamp(usable / (end / US), MIN_ZOOM, MAX_ZOOM);
+    this.timeline.render();
+    view.scrollLeft = 0;
     this.updateStatusBar();
   }
 
@@ -1555,6 +2126,16 @@ class Editor implements TimelineHost {
 
     if (meta) {
       switch (key) {
+        case 'z':
+          event.preventDefault();
+          // Ctrl+Shift+Z : rétablir (convention macOS/Firefox/Chrome).
+          if (event.shiftKey) this.redo();
+          else this.undo();
+          return;
+        case 'y':
+          event.preventDefault();
+          this.redo();
+          return;
         case 's':
           event.preventDefault();
           this.saveProjectFile();
@@ -1585,7 +2166,9 @@ class Editor implements TimelineHost {
           return;
         case '0':
           event.preventDefault();
-          this.fitPreview();
+          // Ctrl+Maj+0 cadre le montage, Ctrl+0 (seul) ajuste l'aperçu.
+          if (event.shiftKey) this.fitTimeline();
+          else this.fitPreview();
           return;
         default:
           return;
@@ -1657,6 +2240,10 @@ class Editor implements TimelineHost {
         els.snapToggle.checked = !els.snapToggle.checked;
         els.snapToggle.dispatchEvent(new Event('change'));
         break;
+      case 'f':
+        event.preventDefault();
+        this.toggleTimelineFocus();
+        break;
       default:
         break;
     }
@@ -1680,6 +2267,10 @@ class Editor implements TimelineHost {
     els.exportFps.value = String(roundFps(fpsValue(this.project.fps)));
     els.exportFormat.value = this.project.export.format;
     els.exportError.hidden = true;
+    els.exportError.textContent = '';
+    // Le résultat de l'export précédent reste dans le DOM sinon : un lien
+    // `blob:` mort, et un `download` périmé que rien ne distingue du nouveau.
+    els.exportResult.innerHTML = '';
     els.exportResult.hidden = true;
     els.exportProgress.hidden = true;
     els.startExportBtn.disabled = false;
@@ -1739,28 +2330,111 @@ class Editor implements TimelineHost {
           effects: effects ? t('export.effects', { n: effects }) : '',
           transitions: transitions ? t('export.transitions', { n: transitions }) : '',
         });
-    const hint = audioOnly ? t('export.hintAudio') : t('export.hintVideo');
+    // Un projet à keyframes / masque / vitesse passe par le navigateur : le
+    // moteur natif ne sait pas encore les rendre, et un export silencieusement
+    // faux est pire qu'un export plus lent mais annoncé.
+    const browserOnly = this.mode === 'local' || needsBrowserRender(this.project);
+    const hint = browserOnly
+      ? t(audioOnly ? 'export.hintAudioBrowser' : 'export.hintVideoBrowser')
+      : t(audioOnly ? 'export.hintAudio' : 'export.hintVideo');
+    const fallback =
+      this.mode !== 'local' && needsBrowserRender(this.project)
+        ? `<br /><span class="hint warn">${escapeHtml(t('export.hintEngineFallback'))}</span>`
+        : '';
     els.exportSummary.innerHTML = `
       ${first}<br />
       ${second}<br />
-      <span class="hint">${escapeHtml(hint)}</span>
+      <span class="hint">${escapeHtml(hint)}</span>${fallback}
     `;
+    void this.checkEncoders();
+  }
+
+  /**
+   * Vérifie **avant** l'export que le navigateur sait encoder la combinaison
+   * choisie. Proposer 4K H.264 puis échouer après vingt secondes de composition
+   * est le pire des comportements : ici le bouton est bloqué et la raison est
+   * écrite noir sur blanc, à côté des réglages concernés.
+   */
+  private async checkEncoders(): Promise<void> {
+    const token = ++this.encoderCheckToken;
+    const notice = els.exportEncoderNotice;
+    const settle = (blocked: boolean, message = ''): void => {
+      // Une vérification plus récente a pris la main : on ignore ce résultat.
+      if (token !== this.encoderCheckToken) return;
+      this.encoderBlocked = blocked;
+      notice.textContent = message;
+      notice.hidden = !blocked;
+      // Un export en cours gère lui-même l'état du bouton.
+      if (els.exportProgress.hidden) els.startExportBtn.disabled = blocked;
+    };
+
+    const format = els.exportFormat.value as ExportFormat;
+    const browserPath = this.mode === 'local' || needsBrowserRender(this.project);
+    if (!browserPath || format === 'mp3' || typeof VideoEncoder === 'undefined') {
+      settle(false);
+      return;
+    }
+
+    const [width, height] = els.exportResolution.value.split('x').map(Number);
+    if (!width || !height) {
+      settle(false);
+      return;
+    }
+    const framerate = Number(els.exportFps.value) || 30;
+    const candidates =
+      format === 'webm'
+        ? ['vp09.00.10.08', 'vp8']
+        : ['avc1.640028', 'avc1.4D4028', 'avc1.42E028', 'avc1.42E01F'];
+
+    for (const codec of candidates) {
+      try {
+        const support = await VideoEncoder.isConfigSupported({
+          codec,
+          width,
+          height,
+          bitrate: 8_000_000,
+          framerate,
+        });
+        if (support.supported) {
+          settle(false);
+          return;
+        }
+      } catch {
+        // codec inconnu de ce navigateur : on essaie le suivant
+      }
+    }
+    settle(true, t('export.encoderUnsupported', { format: format.toUpperCase(), width, height }));
   }
 
   private async startExport(): Promise<void> {
-    if (!this.engineOk) {
+    // Seul l'export par ffmpeg exige un moteur joignable ; en mode navigateur
+    // (WebCodecs) l'absence de moteur est normale, pas une panne.
+    if (this.mode === 'engine' && !this.engineOk) {
       this.toast(t('toast.engineOfflineExport'), 'error');
+      return;
+    }
+    // Filet de sécurité : le bouton est déjà désactivé par `checkEncoders`, mais
+    // un clic programmé (ou un état périmé) ne doit pas lancer un export voué à
+    // l'échec.
+    if (this.encoderBlocked) {
+      this.toast(els.exportEncoderNotice.textContent || '', 'error');
       return;
     }
     const project = this.exportProject();
     els.startExportBtn.disabled = true;
     els.cancelExportBtn.hidden = false;
     els.exportError.hidden = true;
+    els.exportError.textContent = '';
     els.exportResult.hidden = true;
     els.exportProgress.hidden = false;
     els.exportProgressFill.style.width = '0%';
     els.exportStage.textContent = t('export.sending');
     els.exportPercent.textContent = '0 %';
+
+    if (this.mode === 'local' || needsBrowserRender(project)) {
+      await this.startBrowserExport(project);
+      return;
+    }
 
     try {
       this.currentJob = await api.startExport({
@@ -1772,6 +2446,92 @@ class Editor implements TimelineHost {
       this.pollJob();
     } catch (error) {
       this.exportFailed((error as Error).message);
+    }
+  }
+
+  /** Export sans moteur : rendu + encodage WebCodecs dans l'onglet courant. */
+  private async startBrowserExport(project: Project): Promise<void> {
+    if (typeof VideoEncoder === 'undefined') {
+      this.exportFailed(t('export.browserUnsupported', { format: project.export.format.toUpperCase() }));
+      return;
+    }
+    this.browserExport = new AbortController();
+    els.exportStage.textContent = t('export.browserStart');
+    const started = performance.now();
+    try {
+      const result = await exportInBrowser({
+        project,
+        format: project.export.format,
+        width: project.width,
+        height: project.height,
+        fps: fpsValue(project.fps),
+        quality: els.exportQuality.value as 'high' | 'medium' | 'fast',
+        signal: this.browserExport.signal,
+        onProgress: (stage, percent) => {
+          els.exportProgressFill.style.width = `${clamp(percent, 0, 100)}%`;
+          els.exportPercent.textContent = `${Math.round(percent)} %`;
+          const label = t(`stage.${stage}`);
+          els.exportStage.textContent = label === `stage.${stage}` ? stage : label;
+        },
+      });
+      this.showBrowserResult(result, (performance.now() - started) / 1000);
+    } catch (error) {
+      // Une annulation demandée par l'utilisateur n'est pas un échec.
+      if (this.browserExport?.signal.aborted) {
+        els.exportProgress.hidden = true;
+        // Le texte de l'échec précédent ne doit pas rester dans le DOM : masqué
+        // il est invisible, mais il ressurgirait au prochain affichage.
+        els.exportError.textContent = '';
+        els.exportError.hidden = true;
+        els.exportStage.textContent = t('stage.cancelled');
+        els.startExportBtn.disabled = this.encoderBlocked;
+        els.cancelExportBtn.hidden = true;
+        this.setStatus(t('stage.cancelled'));
+        return;
+      }
+      this.exportFailed((error as Error).message);
+    } finally {
+      this.browserExport = null;
+    }
+  }
+
+  private showBrowserResult(result: BrowserExportResult, seconds: number): void {
+    els.startExportBtn.disabled = this.encoderBlocked;
+    els.cancelExportBtn.hidden = true;
+    els.exportProgress.hidden = true;
+    const url = URL.createObjectURL(result.blob);
+    const size = t('export.size', { n: (result.size_bytes / 1024 / 1024).toFixed(2) });
+    const audioOnly = result.format === 'mp3';
+    const videoCodec = result.format === 'mp4' ? 'H.264' : 'VP9';
+    const audioCodec = result.format === 'mp4' ? 'AAC' : 'Opus';
+    const codecs = `${videoCodec} + ${result.has_audio ? audioCodec : t('export.noAudio')}`;
+    const details = audioOnly
+      ? t('export.detailsAudio', { size, time: formatTimecode(result.duration_us) })
+      : t('export.detailsVideo', {
+          size,
+          frames: result.frames,
+          seconds: seconds.toFixed(1),
+          codecs,
+          width: result.width,
+          height: result.height,
+        });
+    const name = `${sanitizeFileName(this.project.name)}.${result.format}`;
+    const warning = result.audio_skipped > 0
+      ? `<div class="export-warn">${escapeHtml(
+          t('export.audioSkipped', { n: result.audio_skipped }),
+        )}</div>`
+      : '';
+    els.exportResult.innerHTML = `
+      <strong>${escapeHtml(t('export.done'))}</strong> — ${result.format.toUpperCase()}<br />
+      ${details}
+      <a href="${url}" download="${escapeHtml(name)}">${escapeHtml(t('export.download'))}</a>
+      ${warning}
+    `;
+    els.exportResult.hidden = false;
+    this.setStatus(t('status.exportDone', { size }));
+    this.toast(t('toast.exportDone'), 'ok');
+    if (result.audio_skipped > 0) {
+      this.toast(t('export.audioSkipped', { n: result.audio_skipped }), 'error');
     }
   }
 
@@ -1830,13 +2590,18 @@ class Editor implements TimelineHost {
     els.exportProgress.hidden = true;
     els.exportError.textContent = `${t('export.failed')}\n${message}`;
     els.exportError.hidden = false;
-    els.startExportBtn.disabled = false;
+    els.startExportBtn.disabled = this.encoderBlocked;
     els.cancelExportBtn.hidden = true;
     this.setStatus(t('status.exportFailed'));
     this.toast(t('toast.exportFailed'), 'error');
   }
 
   private async cancelExport(): Promise<void> {
+    if (this.mode === 'local') {
+      this.browserExport?.abort();
+      els.exportStage.textContent = t('export.canceling');
+      return;
+    }
     if (!this.currentJob) return;
     try {
       await api.cancelJob(this.currentJob);
@@ -1859,6 +2624,8 @@ const els = {
   btnNew: must<HTMLButtonElement>('btn-new'),
   btnOpen: must<HTMLButtonElement>('btn-open'),
   btnSave: must<HTMLButtonElement>('btn-save'),
+  btnUndo: must<HTMLButtonElement>('btn-undo'),
+  btnRedo: must<HTMLButtonElement>('btn-redo'),
   btnImportSide: must<HTMLButtonElement>('btn-import-side'),
   btnHelp: must<HTMLButtonElement>('btn-help'),
   btnToggleLeft: must<HTMLButtonElement>('btn-toggle-left'),
@@ -1890,6 +2657,9 @@ const els = {
   timelineContent: must<HTMLElement>('timelineContent'),
   playhead: must<HTMLElement>('playhead'),
   timelineScroll: must<HTMLElement>('timelineScroll'),
+  timelineScrub: must<HTMLElement>('timelineScrub'),
+  scrubFill: must<HTMLElement>('scrubFill'),
+  scrubKnob: must<HTMLElement>('scrubKnob'),
   timelinePanel: must<HTMLElement>('timelinePanel'),
   timelineResizer: must<HTMLElement>('timelineResizer'),
   btnAddVideo: must<HTMLButtonElement>('btn-add-video'),
@@ -1901,7 +2671,9 @@ const els = {
   btnInsertRect: must<HTMLButtonElement>('btn-insert-rect'),
   btnInsertEllipse: must<HTMLButtonElement>('btn-insert-ellipse'),
   btnZoomIn: must<HTMLButtonElement>('btn-zoom-in'),
+  btnZoomFit: must<HTMLButtonElement>('btn-zoom-fit'),
   btnZoomOut: must<HTMLButtonElement>('btn-zoom-out'),
+  btnTimelineFocus: must<HTMLButtonElement>('btn-timeline-focus'),
   toolsScroll: document.querySelector<HTMLElement>('.tools-scroll') as HTMLElement,
   toolsEyebrow: must<HTMLElement>('toolsEyebrow'),
   toolsTitle: must<HTMLElement>('toolsTitle'),
@@ -1928,6 +2700,7 @@ const els = {
   exportPercent: must<HTMLElement>('exportPercent'),
   exportResult: must<HTMLElement>('exportResult'),
   exportError: must<HTMLElement>('exportError'),
+  exportEncoderNotice: must<HTMLElement>('exportEncoderNotice'),
   startExportBtn: must<HTMLButtonElement>('startExportBtn'),
   cancelExportBtn: must<HTMLButtonElement>('cancelExportBtn'),
   helpModal: must<HTMLElement>('helpModal'),
@@ -1936,6 +2709,7 @@ const els = {
   prefsFormat: must<HTMLSelectElement>('prefsFormat'),
   prefsShortcuts: must<HTMLButtonElement>('prefs-shortcuts'),
   prefsEngine: must<HTMLElement>('prefsEngine'),
+  prefsVersion: must<HTMLElement>('prefsVersion'),
   toastHost: must<HTMLElement>('toastHost'),
 };
 
@@ -1999,6 +2773,7 @@ function loadPrefs(): Prefs {
     leftPanel: true,
     rightPanel: true,
     timelineHeight: 306,
+    timelineCollapsed: false,
   };
   try {
     const raw = store.get(STORAGE_PREFS);
@@ -2014,6 +2789,7 @@ function loadPrefs(): Prefs {
       leftPanel: parsed.leftPanel !== false,
       rightPanel: parsed.rightPanel !== false,
       timelineHeight: Number(parsed.timelineHeight) || 306,
+      timelineCollapsed: parsed.timelineCollapsed === true,
     };
   } catch {
     return fallback;
@@ -2022,6 +2798,28 @@ function loadPrefs(): Prefs {
 
 function roundFps(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+/** Facteur d'affichage d'une propriété animable (les % sont plus lisibles). */
+function keyframeScale(prop: KeyframeProp): {
+  factor: number;
+  suffix: string;
+  min: number;
+  max: number;
+  step: number;
+} {
+  switch (prop) {
+    case 'opacity':
+      return { factor: 100, suffix: '%', min: 0, max: 100, step: 1 };
+    case 'volume':
+      return { factor: 100, suffix: '%', min: 0, max: 200, step: 1 };
+    case 'scale':
+      return { factor: 100, suffix: '%', min: 5, max: 400, step: 1 };
+    case 'rotation':
+      return { factor: 1, suffix: '°', min: -360, max: 360, step: 1 };
+    default:
+      return { factor: 100, suffix: '%', min: -50, max: 150, step: 1 };
+  }
 }
 
 function fieldText(label: string, property: string, value: string): string {

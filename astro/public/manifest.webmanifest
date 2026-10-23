@@ -2,7 +2,7 @@
   "id": "./",
   "name": "CUT THE FLOW",
   "short_name": "CTF Editor",
-  "description": "CUT THE FLOW : montage vidéo multipiste, effets, transitions et formes. Import local, export MP4, WebM et MP3 par un moteur Rust déterministe.",
+  "description": "CUT THE FLOW : montage vidéo multipiste, effets, transitions et formes. Import local, export MP4, WebM et MP3 par un moteur Rust déterministe ou directement dans le navigateur.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",
