@@ -28,6 +28,37 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+<#
+Écrit une archive ZIP dont les chemins utilisent « / ».
+
+`Compress-Archive` écrit « icons\cuttheflow.png » sous Windows : sur Linux,
+`unzip` crée alors un fichier littéralement nommé « icons\cuttheflow.png » au
+lieu d'un dossier. Comme l'archive Linux contient maintenant un sous-dossier
+d'icônes, on écrit l'archive nous-mêmes.
+#>
+function New-ZipArchive {
+    param(
+        [Parameter(Mandatory)][string]$SourceDirectory,
+        [Parameter(Mandatory)][string]$Destination,
+        [string[]]$Exclude = @()
+    )
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    if (Test-Path $Destination) { Remove-Item $Destination -Force }
+    $source = (Resolve-Path $SourceDirectory).Path.TrimEnd('\', '/')
+    $zip = [System.IO.Compression.ZipFile]::Open($Destination, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        Get-ChildItem $source -Recurse -File | ForEach-Object {
+            $relative = $_.FullName.Substring($source.Length + 1).Replace('\', '/')
+            if ($Exclude -contains $_.Name) { return }
+            [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $zip, $_.FullName, $relative, [System.IO.Compression.CompressionLevel]::Optimal)
+        }
+    } finally {
+        $zip.Dispose()
+    }
+}
 $root = Split-Path -Parent $PSScriptRoot
 $astro = Join-Path (Split-Path -Parent $root) 'astro'
 $dist = Join-Path $root 'dist'
@@ -178,8 +209,17 @@ foreach ($package in $packages) {
     if (Test-Path $launcherSource) {
         Copy-Item $launcherSource (Join-Path $staging $package.launcher) -Force
     }
+    # Linux : sans entrée de menu ni icônes, l'application n'apparaît pas dans le
+    # lanceur et le tableau de bord affiche une icône générique.
+    if ($package.name -like 'linux-*') {
+        Copy-Item (Join-Path $PSScriptRoot 'lanceurs\cuttheflow.desktop') $staging -Force
+        Copy-Item (Join-Path $PSScriptRoot 'lanceurs\installer.sh') $staging -Force
+        $icons = Join-Path $staging 'icons'
+        New-Item -ItemType Directory -Force -Path $icons | Out-Null
+        Copy-Item (Join-Path $PSScriptRoot 'icons\cuttheflow-*.png') $icons -Force
+    }
     $archive = Join-Path $packDir "CUTTHEFLOW-$version-$($package.name).zip"
-    Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $archive -CompressionLevel Optimal -Force
+    New-ZipArchive -SourceDirectory $staging -Destination $archive
     Write-Host "  $([System.IO.Path]::GetFileName($archive))  ($([math]::Round((Get-Item $archive).Length / 1MB, 2)) Mo)"
 }
 Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue

@@ -8,8 +8,8 @@
 
 <p align="center">
   <b>A desktop video editor whose export is computed by ffmpeg, not by your GPU.</b><br>
-  Multitrack editing in its own window, one deterministic render engine for<br>
-  Windows, macOS and Linux — the same project produces the same file everywhere.
+  Multitrack editing in its own window, one render engine driven by ffmpeg for<br>
+  Windows, macOS and Linux — same settings, same result, frame for frame.
 </p>
 
 <!-- Les liens de téléchargement pointent sur la release « latest », reconstruite
@@ -83,11 +83,17 @@ All releases: [releases](https://github.com/zigmoon/cuttheflow/releases).
 |---|---|
 | Windows | double-click `CUTTHEFLOW-windows-x86_64-setup.exe`, then launch **CUT THE FLOW** from the Start menu |
 | macOS | open the `.dmg`, drag **CUT THE FLOW** into *Applications*, then launch it from Launchpad |
-| Linux | extract the archive, then `bash demarrer.sh` (or run `./cuttheflow`) |
+| Linux | extract the archive, then `bash demarrer.sh` — or `bash installer.sh` to add the menu entry and icon |
 
 The studio opens **in its own application window** — Windows uses the WebView2
 engine already present on Windows 10/11, macOS uses WKWebView, Linux uses
 WebKitGTK. There is no address bar, no tab strip, and no browser to install.
+
+Icons are part of every build: embedded in the Windows `.exe` (with product name
+and version in the file properties), a real `.icns` inside the macOS `.app`, and
+a `.desktop` entry plus a 32→512 px icon set on Linux. Without them an
+application shows up with a generic icon in the dock, the taskbar or the Start
+menu.
 
 Either way it is served from <http://127.0.0.1:7317/>: the server listens on
 `127.0.0.1` only, refuses other origins, and nothing leaves your machine.
@@ -105,15 +111,22 @@ The studio runs two ways, and picks the right one by itself:
 
 | | Without ffmpeg | With ffmpeg |
 |---|---|---|
-| Import, edit, preview | browser (IndexedDB) | engine |
-| Export MP4 / WebM / MP3 | browser (WebCodecs, LAME) | ffmpeg |
-| Identical file on every OS | depends on the browser | **yes** |
+| Import, edit, preview | embedded view (IndexedDB) | engine |
+| Export MP4 / WebM / MP3 | WebCodecs (LAME for MP3) | ffmpeg |
+| Reproducible output | no (hardware encoder) | **yes** (same ffmpeg build → byte-identical) |
+| Quality control | bitrate only | **CRF + preset** |
 | Long edits | bounded by the tab | frame-exact |
+| Export in the background | throttled by the tab | unaffected |
 
-Install it once to get the deterministic engine — `winget install Gyan.FFmpeg`
+Install it once to get the native engine — `winget install Gyan.FFmpeg`
 (Windows), `brew install ffmpeg` (macOS), `apt install ffmpeg` (Linux) — or drop
 `ffmpeg` and `ffprobe` next to the executable. `cuttheflow doctor` reports what
 was found.
+
+Measured on this project (4K 30-frame clip): 4K H.264 in **2.0 s**, two exports
+of the same project **byte-identical**, CRF 18 → 4.09 MB vs CRF 30 → 0.71 MB.
+In the browser path the same encode is possible, but the bitrate is fixed by the
+tab, the encoder is the machine's, and two runs are not expected to match.
 
 ---
 
@@ -131,9 +144,10 @@ model.
 | | Browser engine | This engine |
 |---|---|---|
 | Encoder | WebCodecs / GPU | ffmpeg, fixed settings |
+| Quality | bitrate target | CRF + preset |
 | Long edits | realtime fallback, drifts | frame-exact |
 | Background tab | export stalls | unaffected |
-| Same file on every OS | no | **yes** |
+| Reproducible output | no (hardware encoder) | **yes** (same ffmpeg build → byte-identical) |
 | Verifiable output | hard | measured on every build |
 
 ---

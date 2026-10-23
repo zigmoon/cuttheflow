@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=CUT THE FLOW
+GenericName=Video editor
+GenericName[fr]=Monteur vidéo
+Comment=Multitrack video editing with a deterministic ffmpeg export
+Comment[fr]=Montage multitrack, export déterministe par ffmpeg
+Exec=cuttheflow
+TryExec=cuttheflow
+Icon=cuttheflow
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+Keywords=video;editor;montage;ffmpeg;
+StartupNotify=true
+StartupWMClass=cuttheflow
+Actions=web;
+
+[Desktop Action web]
+Name=Open in the browser
+Name[fr]=Ouvrir dans le navigateur
+Exec=cuttheflow --web

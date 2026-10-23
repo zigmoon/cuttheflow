@@ -320,6 +320,18 @@ jobs:
           cp LICENSE "$STAGE/LICENSE"
           cp "rust/scripts/lanceurs/${{ matrix.launcher }}" "$STAGE/${{ matrix.launcher }}"
           chmod +x "dist/${{ matrix.binary }}" "$STAGE/${{ matrix.bin }}" || true
+
+          # Linux : entrée de menu + icônes. Sans elles, l'application n'apparaît
+          # pas dans le lanceur et le tableau de bord invente une icône.
+          case "${{ matrix.package }}" in
+            linux-*)
+              cp rust/scripts/lanceurs/cuttheflow.desktop "$STAGE/"
+              cp rust/scripts/lanceurs/installer.sh "$STAGE/"
+              chmod +x "$STAGE/installer.sh"
+              mkdir -p "$STAGE/icons"
+              cp rust/scripts/icons/cuttheflow-*.png "$STAGE/icons/"
+              ;;
+          esac
           ls -l dist "$STAGE"
 
       # Chargeur WebView2 : l'import est dynamique avec MinGW, statique avec

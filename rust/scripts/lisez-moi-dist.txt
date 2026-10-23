@@ -8,6 +8,7 @@ DÉMARRER
 --------
 Windows   double-cliquez sur  DEMARRER.cmd
 Linux     dans un terminal :  bash demarrer.sh
+          pour une entrée de menu et une icône :  bash installer.sh
 macOS     double-cliquez sur  demarrer.command
           (ou dans le Terminal :  bash demarrer.command)
 
@@ -55,6 +56,9 @@ FICHIERS
   DEMARRER.cmd         lanceur Windows
   demarrer.sh          lanceur Linux
   demarrer.command     lanceur macOS
+  installer.sh         Linux — entrée de menu et icône (sans root)
+  cuttheflow.desktop   Linux — entrée de menu, modèle portable
+  icons/               Linux — icônes 32 à 512 px
   LISEZ-MOI.txt        ce fichier
   LICENSE              licence du logiciel
 
@@ -62,6 +66,11 @@ Windows : ne séparez jamais cuttheflow.exe des .dll qui l'accompagnent. Si vous
 déplacez l'exécutable, déplacez tout le dossier. (Selon la chaîne de
 compilation, l'une de ces DLL peut être liée en dur et donc absente : c'est
 normal, le studio démarre quand même.)
+
+Linux : « bash demarrer.sh » suffit pour travailler. « bash installer.sh » va
+plus loin : installe l'exécutable dans ~/.local/bin, les icônes dans le thème du
+bureau et l'entrée dans le menu des applications. Aucun mot de passe demandé,
+rien n'est écrit hors de votre dossier personnel.
 
 FFMPEG : OPTIONNEL
 ------------------

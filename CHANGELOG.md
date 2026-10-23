@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [CUT THE FLOW 2 — studio web 2.6.3 / moteur 0.9.2] - 2026-10-24
+
+### ✨ Ajouté — icône et métadonnées dans le `.exe` Windows
+
+Le binaire Windows n'avait **aucune section de ressources** : Explorer affichait
+une icône générique, et les propriétés du fichier ne donnaient ni éditeur, ni
+nom de produit, ni version. `build.rs` génère maintenant un `.rc` (icône 16 à
+256 px, `VERSIONINFO` avec version moteur et version studio) et le compile avec
+`llvm-rc`, `windres` ou le `rc.exe` du SDK Windows — le premier trouvé. Aucun
+échec bloquant : sans compilateur de ressources, le binaire sort simplement sans
+icône, avec un avertissement.
+
+Vérifié : section `.rsrc` présente, icône 32×32 extraite par Windows,
+`ProductName = CUT THE FLOW`, `ProductVersion = 2.6.3`, `FileVersion = 0.9.2`.
+
+### ✨ Ajouté — icône, entrée de menu et installation sur Linux
+
+L'archive Linux ne contenait que le binaire : pas d'icône (les ELF n'en portent
+pas), pas d'entrée de menu, donc rien dans le lanceur et une icône générique
+dans le tableau de bord. L'archive contient désormais `installer.sh`,
+`cuttheflow.desktop` et un jeu d'icônes 32 → 512 px. `bash installer.sh`
+installe tout dans `~/.local` **sans root**, avec un `StartupWMClass` correct
+pour que la fenêtre soit rattachée à son icône.
+
+Vérifié en exécutant le script : `~/.local/bin/cuttheflow`,
+`~/.local/share/icons/hicolor/{32..512}x*/apps/cuttheflow.png`,
+`~/.local/share/applications/cuttheflow.desktop` avec chemins absolus.
+
+### 🐛 Corrigé — l'archive Linux locale était illisible sous Linux
+
+`Compress-Archive` écrit les chemins avec des antislashs : `unzip` sous Linux
+aurait créé un fichier nommé littéralement `icons\cuttheflow-32.png` au lieu
+d'un dossier. Les archives sont désormais écrites par le script lui-même, avec
+des séparateurs `/`.
+
+### 🐛 Corrigé — `installer.sh` cassait sur un chemin contenant `&` ou `|`
+
+La substitution `sed` interprétait aussi les antislashs d'un chemin. Le fichier
+`.desktop` est maintenant écrit directement, sans substitution.
+
+### 📝 Corrigé — une promesse trop forte dans la documentation
+
+« le même projet produit le même fichier partout » n'est pas démontrable : le
+moteur ne fixe pas le nombre de threads, et deux compilations de ffmpeg
+diffèrent. La formulation devient « mêmes réglages, même résultat, image par
+image », avec la précision « identique octet pour octet avec la même
+compilation de ffmpeg » — ce que nous mesurons réellement.
+
+### ✅ Ajouté au README — ce que le moteur natif apporte
+
+Tableau comparatif mesuré (4K H.264 en 2,0 s, deux exports identiques au
+SHA-256, CRF 18 → 4,09 Mo contre CRF 30 → 0,71 Mo) et mention des icônes dans
+chaque build.
+
+### 🔧 Service worker `ctf2-v12`
+
+Purge du cache pour les visiteurs déjà passés sur la PWA.
+
+---
 ## [CUT THE FLOW 2 — studio web 2.6.2 / moteur 0.9.1] - 2026-10-23
 
 ### 🎨 Modifié — l'interface ne parle plus de « navigateur » dans l'application
