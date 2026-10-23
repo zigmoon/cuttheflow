@@ -80,14 +80,28 @@ jobs:
             package: windows-x86_64
             launcher: DEMARRER.cmd
             compress: powershell
+            # Fenêtre native : l'interface s'ouvre dans une vraie fenêtre
+            # d'application (WebView2, présent sur Windows 10/11).
+            features: '--features desktop'
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            name: Linux x86-64
+            name: Linux x86-64 (autonome)
             binary: cuttheflow-linux-x86_64
             bin: cuttheflow
             package: linux-x86_64
             launcher: demarrer.sh
             compress: zip
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            name: Linux x86-64 (fenêtre native)
+            binary: cuttheflow-linux-x86_64-desktop
+            bin: cuttheflow
+            package: linux-x86_64-desktop
+            launcher: demarrer.sh
+            compress: zip
+            # La fenêtre native exige WebKitGTK (donc glibc, pas musl).
+            features: '--features desktop'
+            webkit: true
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             name: Linux ARM64
@@ -105,6 +119,9 @@ jobs:
             package: macos-arm64
             launcher: demarrer.command
             compress: zip
+            # WKWebView fait partie de macOS : la fenêtre native ne demande
+            # aucune bibliothèque supplémentaire.
+            features: '--features desktop'
           - os: macos-15-intel
             target: x86_64-apple-darwin
             name: macOS Intel
@@ -113,6 +130,7 @@ jobs:
             package: macos-x86_64
             launcher: demarrer.command
             compress: zip
+            features: '--features desktop'
 
     runs-on: ${{ matrix.os }}
     env:
@@ -142,7 +160,7 @@ jobs:
           npm run build --prefix astro
 
       - name: Dépendances Linux (musl x86-64)
-        if: runner.os == 'Linux' && matrix.cross == ''
+        if: runner.os == 'Linux' && matrix.cross == '' && !matrix.webkit
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Dépendances Linux (musl ARM64)
@@ -151,19 +169,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
 
+      # WebKitGTK est la seule dépendance de compilation de la fenêtre native
+      # sous Linux. Elle est fournie par la distribution à l'exécution.
+      - name: Dépendances Linux (WebKitGTK, fenêtre native)
+        if: matrix.webkit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev pkg-config
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Moteur Rust (natif)
         if: matrix.cross == ''
-        run: cargo build --release --manifest-path rust/Cargo.toml --target ${{ matrix.target }} -p ctf-app
+        run: cargo build --release --manifest-path rust/Cargo.toml --target ${{ matrix.target }} -p ctf-app ${{ matrix.features }}
 
       - name: Moteur Rust (ARM64 croisé)
         if: matrix.cross != ''
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: ${{ matrix.cross }}
-        run: cargo build --release --manifest-path rust/Cargo.toml --target ${{ matrix.target }} -p ctf-app
+        run: cargo build --release --manifest-path rust/Cargo.toml --target ${{ matrix.target }} -p ctf-app ${{ matrix.features }}
 
       - name: Tests unitaires du noyau
         if: matrix.cross == '' && runner.os != 'Linux'
@@ -241,6 +267,23 @@ jobs:
           chmod +x "dist/${{ matrix.binary }}" "$STAGE/${{ matrix.bin }}" || true
           ls -l dist "$STAGE"
 
+      # Chargeur WebView2 : selon la version de la crate, l'import reste
+      # dynamique. On le joint systématiquement quand il existe pour éviter le
+      # démarrage silencieusement avorté (0xC0000135) chez l'utilisateur.
+      - name: Chargeur WebView2 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $loader = Get-ChildItem "$env:USERPROFILE\.cargo\registry\src" -Recurse -Filter 'WebView2Loader.dll' -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match '\\x64$' } | Select-Object -First 1
+          if ($loader) {
+            Copy-Item $loader.FullName 'dist/WebView2Loader.dll' -Force
+            Copy-Item $loader.FullName (Join-Path $env:RUNNER_TEMP 'pkg/WebView2Loader.dll') -Force
+            Write-Host "WebView2Loader.dll joint (depuis $($loader.FullName))"
+          } else {
+            Write-Host "WebView2Loader.dll absent du registre : import statique probable."
+          }
+
       - name: Archive (Linux, macOS)
         if: matrix.compress == 'zip'
         shell: bash
@@ -316,19 +359,24 @@ jobs:
             echo "Studio **${VERSION}** · moteur **${ENGINE}**"
             echo
             echo "L'interface est embarquée dans chaque exécutable : rien à installer à côté."
-            echo "**ffmpeg est optionnel** — sans lui, le studio travaille dans le navigateur"
-            echo "(WebCodecs) : import, montage, aperçu et export MP4 / WebM / MP3."
+            echo "Sous Windows et macOS, le studio s'ouvre dans **sa propre fenêtre** (WebView2 / WKWebView),"
+            echo "sans barre d'adresse ni onglets. **ffmpeg est optionnel** — sans lui, le studio travaille"
+            echo "dans la vue embarquée (WebCodecs) : import, montage, aperçu et export MP4 / WebM / MP3."
             echo
             echo "| Système | Archive (avec lanceur) | Binaire seul |"
             echo "|---|---|---|"
-            echo "| Windows 10/11 x64 | [CUTTHEFLOW-windows-x86_64.zip](${BASE}/CUTTHEFLOW-windows-x86_64.zip) | [cuttheflow-windows-x86_64.exe](${BASE}/cuttheflow-windows-x86_64.exe) |"
-            echo "| Linux x86-64 | [CUTTHEFLOW-linux-x86_64.zip](${BASE}/CUTTHEFLOW-linux-x86_64.zip) | [cuttheflow-linux-x86_64](${BASE}/cuttheflow-linux-x86_64) |"
-            echo "| Linux ARM64 | [CUTTHEFLOW-linux-aarch64.zip](${BASE}/CUTTHEFLOW-linux-aarch64.zip) | [cuttheflow-linux-aarch64](${BASE}/cuttheflow-linux-aarch64) |"
-            echo "| macOS Apple Silicon | [CUTTHEFLOW-macos-arm64.zip](${BASE}/CUTTHEFLOW-macos-arm64.zip) | [cuttheflow-macos-arm64](${BASE}/cuttheflow-macos-arm64) |"
-            echo "| macOS Intel | [CUTTHEFLOW-macos-x86_64.zip](${BASE}/CUTTHEFLOW-macos-x86_64.zip) | [cuttheflow-macos-x86_64](${BASE}/cuttheflow-macos-x86_64) |"
+            echo "| Windows 10/11 x64 — fenêtre native | [CUTTHEFLOW-windows-x86_64.zip](${BASE}/CUTTHEFLOW-windows-x86_64.zip) | [cuttheflow-windows-x86_64.exe](${BASE}/cuttheflow-windows-x86_64.exe) |"
+            echo "| macOS Apple Silicon — fenêtre native | [CUTTHEFLOW-macos-arm64.zip](${BASE}/CUTTHEFLOW-macos-arm64.zip) | [cuttheflow-macos-arm64](${BASE}/cuttheflow-macos-arm64) |"
+            echo "| macOS Intel — fenêtre native | [CUTTHEFLOW-macos-x86_64.zip](${BASE}/CUTTHEFLOW-macos-x86_64.zip) | [cuttheflow-macos-x86_64](${BASE}/cuttheflow-macos-x86_64) |"
+            echo "| Linux x86-64 — fenêtre native (WebKitGTK) | [CUTTHEFLOW-linux-x86_64-desktop.zip](${BASE}/CUTTHEFLOW-linux-x86_64-desktop.zip) | [cuttheflow-linux-x86_64-desktop](${BASE}/cuttheflow-linux-x86_64-desktop) |"
+            echo "| Linux x86-64 — autonome (aucune bibliothèque) | [CUTTHEFLOW-linux-x86_64.zip](${BASE}/CUTTHEFLOW-linux-x86_64.zip) | [cuttheflow-linux-x86_64](${BASE}/cuttheflow-linux-x86_64) |"
+            echo "| Linux ARM64 — autonome | [CUTTHEFLOW-linux-aarch64.zip](${BASE}/CUTTHEFLOW-linux-aarch64.zip) | [cuttheflow-linux-aarch64](${BASE}/cuttheflow-linux-aarch64) |"
             echo
             echo "**Démarrer** — Windows : \`DEMARRER.cmd\` · Linux : \`bash demarrer.sh\` · macOS : \`demarrer.command\`"
-            echo "Le studio s'ouvre sur http://127.0.0.1:7317/"
+            echo
+            echo "Sous Linux, la build « autonome » ne dépend d'aucune bibliothèque : elle ouvre le studio"
+            echo "dans le navigateur par défaut (\`--web\`). La build « fenêtre native » exige WebKitGTK 4.1"
+            echo "(Ubuntu 24.04+, Debian 13+ : \`sudo apt install libwebkit2gtk-4.1-0\`)."
             echo
             echo "Le studio web reste disponible : https://app.zigmoon.com/CUTTHEFLOW/"
             echo

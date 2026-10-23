@@ -202,6 +202,18 @@ binaires exécutables, simplement non notariés. C'est le comportement demandé
 | Documentation | le mode d'emploi explique pourquoi l'interface passe par un moteur de rendu Chromium, et comment l'installer comme PWA (icône + fenêtre sans chrome) |
 | Studio web | inchangé (2.5.1) : ce sont les binaires qui changent |
 
+## Version 2.6.0 / moteur 0.9.0 — 23 octobre 2026
+
+| Changement | Détail |
+|---|---|
+| **Fenêtre native** | l'exécutable embarque le moteur de rendu du système (`wry` + `tao`) : WebView2 sous Windows, WKWebView sous macOS, WebKitGTK sous Linux. Nouveau module `ctf-app/src/desktop.rs`, `server.rs` scindé en `prepare()` / `serve_forever()` / `run()` (navigateur) / `run_native()` (fenêtre) |
+| **Repli annoncé** | si la fenêtre native échoue (WebKitGTK absent, pas de session graphique), le studio le signale et bascule sur le navigateur plutôt que de refuser de démarrer |
+| **Options** | `--native` (défaut des binaires `desktop`) et `--web` (navigateur) |
+| **Six builds CI** | Windows, macOS ARM64, macOS Intel, Linux x86-64 *fenêtre native* (glibc + WebKitGTK), Linux x86-64 *autonome* (musl statique), Linux ARM64 *autonome* |
+| **Icône Préférences** | le glyphe se lisait comme un soleil ; remplacé par une roue dentée |
+| **WebView2Loader.dll** | jointe automatiquement à l'archive Windows par `build.ps1` et par la CI (import dynamique de `wry`) |
+| Service worker | `VERSION` = `ctf2-v9` |
+
 ## Version 2.5.1 — 23 octobre 2026 (studio ; moteur inchangé 0.7.0)
 
 | Changement | Détail |

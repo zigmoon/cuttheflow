@@ -49,16 +49,17 @@
 
 ## Download
 
-Five native builds, published by CI on every commit: no build tools needed on
+Six native builds, published by CI on every commit: no build tools needed on
 your side.
 
 | System | Archive (recommended) | Bare binary |
 |---|---|---|
-| Windows 10/11 x64 | [`CUTTHEFLOW-windows-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip) | [`cuttheflow-windows-x86_64.exe`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-windows-x86_64.exe) |
-| macOS Apple Silicon | [`CUTTHEFLOW-macos-arm64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.zip) | [`cuttheflow-macos-arm64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-arm64) |
-| macOS Intel | [`CUTTHEFLOW-macos-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-x86_64.zip) | [`cuttheflow-macos-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-x86_64) |
-| Linux x86-64 | [`CUTTHEFLOW-linux-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64.zip) | [`cuttheflow-linux-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-x86_64) |
-| Linux ARM64 | [`CUTTHEFLOW-linux-aarch64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-aarch64.zip) | [`cuttheflow-linux-aarch64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-aarch64) |
+| Windows 10/11 x64 — **native window** | [`CUTTHEFLOW-windows-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip) | [`cuttheflow-windows-x86_64.exe`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-windows-x86_64.exe) |
+| macOS Apple Silicon — **native window** | [`CUTTHEFLOW-macos-arm64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.zip) | [`cuttheflow-macos-arm64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-arm64) |
+| macOS Intel — **native window** | [`CUTTHEFLOW-macos-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-x86_64.zip) | [`cuttheflow-macos-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-macos-x86_64) |
+| Linux x86-64 — **native window** (WebKitGTK) | [`CUTTHEFLOW-linux-x86_64-desktop.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64-desktop.zip) | [`cuttheflow-linux-x86_64-desktop`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-x86_64-desktop) |
+| Linux x86-64 — self-contained | [`CUTTHEFLOW-linux-x86_64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64.zip) | [`cuttheflow-linux-x86_64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-x86_64) |
+| Linux ARM64 — self-contained | [`CUTTHEFLOW-linux-aarch64.zip`](https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-aarch64.zip) | [`cuttheflow-linux-aarch64`](https://github.com/zigmoon/cuttheflow/releases/latest/download/cuttheflow-linux-aarch64) |
 
 Integrity: [`SHA256SUMS.txt`](https://github.com/zigmoon/cuttheflow/releases/latest/download/SHA256SUMS.txt).
 All releases: [releases](https://github.com/zigmoon/cuttheflow/releases).
@@ -69,19 +70,24 @@ Extract the archive, then:
 
 | System | Double-click | Or in a terminal |
 |---|---|---|
-| Windows | `DEMARRER.cmd` | `cuttheflow.exe serve --open` |
+| Windows | `DEMARRER.cmd` | `cuttheflow.exe` |
 | macOS | `demarrer.command` | `bash demarrer.command` |
 | Linux | `demarrer.sh` | `bash demarrer.sh` |
 
-The studio opens **in its own window** — app mode of Chrome / Edge / Brave /
-Chromium, so no tabs and no address bar. Without a Chromium-based browser it
-falls back to your default browser. Either way it is served from
-<http://127.0.0.1:7317/>: the server listens on `127.0.0.1` only, refuses other
-origins, and nothing leaves your machine.
+The studio opens **in its own application window** — Windows uses the WebView2
+engine already present on Windows 10/11, macOS uses WKWebView, Linux uses
+WebKitGTK. There is no address bar, no tab strip, and no browser to install.
 
-To get a real launcher icon and a window that never shows browser chrome, use
-**Install CUT THE FLOW** in the browser menu (Chrome / Edge): the studio is a
-PWA and installs itself.
+Two fallbacks keep it working everywhere:
+
+- the *self-contained* Linux build (static, no dependency at all) and
+  `--web` open the studio in your default browser;
+- on Linux, the *native window* build needs WebKitGTK 4.1
+  (`sudo apt install libwebkit2gtk-4.1-0`, present by default on Ubuntu 24.04+
+  and Debian 13+).
+
+Either way it is served from <http://127.0.0.1:7317/>: the server listens on
+`127.0.0.1` only, refuses other origins, and nothing leaves your machine.
 
 > **macOS first launch.** Builds are ad-hoc signed (mandatory on Apple Silicon).
 > If you download the bare binary instead of the archive, Gatekeeper may block

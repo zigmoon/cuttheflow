@@ -6,6 +6,8 @@
 //! `export` : exporte un projet JSON sans navigateur (banc de régression, CI).
 
 mod assets;
+#[cfg(feature = "desktop")]
+mod desktop;
 mod server;
 
 use std::path::{Path, PathBuf};
@@ -219,6 +221,9 @@ fn export_command(args: &[String]) -> Result<(), String> {
 
 fn serve(args: &[String]) -> Result<(), String> {
     let mut options = server::ServerOptions::default();
+    // Un binaire compilé avec la fenêtre native l'ouvre par défaut : c'est ce
+    // qu'on attend d'une application de bureau. `--web` force le navigateur.
+    let mut native = cfg!(feature = "desktop");
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -245,6 +250,10 @@ fn serve(args: &[String]) -> Result<(), String> {
             }
             "--no-open" => options.open_browser = false,
             "--open" => options.open_browser = true,
+            // Fenêtre native (WebView du système) au lieu d'un navigateur.
+            "--native" => native = true,
+            // Force le mode navigateur même sur un binaire « desktop ».
+            "--web" => native = false,
             other => return Err(format!("option inconnue : {other}")),
         }
         index += 1;
@@ -257,6 +266,9 @@ fn serve(args: &[String]) -> Result<(), String> {
         Ok(tool) => (Some(tool), None),
         Err(error) => (None, Some(error)),
     };
+    if native {
+        return server::run_native(ffmpeg, ffmpeg_error, options);
+    }
     server::run(ffmpeg, ffmpeg_error, options)
 }
 

@@ -12,8 +12,19 @@ repository.workspace = true
 name = "cuttheflow"
 path = "src/main.rs"
 
+[features]
+default = []
+# Fenêtre native (WebView du système) au lieu d'un navigateur externe.
+# Windows : WebView2 · macOS : WKWebView · Linux : WebKitGTK.
+# Désactivé par défaut : la compilation reste possible sans les bibliothèques
+# graphiques, et les binaires « serveur » (Linux statique musl) n'en ont pas
+# besoin.
+desktop = ["dep:wry", "dep:tao"]
+
 [dependencies]
 ctf-core = { path = "../ctf-core" }
 ctf-engine = { path = "../ctf-engine" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+wry = { version = "0.57", optional = true }
+tao = { version = "0.34", optional = true }

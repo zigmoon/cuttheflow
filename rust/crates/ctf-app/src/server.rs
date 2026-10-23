@@ -124,7 +124,19 @@ struct Job {
     created_ms: u128,
 }
 
-pub fn run(ffmpeg: Option<Ffmpeg>, ffmpeg_error: Option<String>, options: ServerOptions) -> Result<(), String> {
+/// Serveur prêt mais pas encore à l'écoute des requêtes.
+struct Prepared {
+    state: Arc<State>,
+    listener: TcpListener,
+    url: String,
+}
+
+/// Crée les dossiers, résout ffmpeg, ouvre le port et affiche la bannière.
+fn prepare(
+    ffmpeg: Option<Ffmpeg>,
+    ffmpeg_error: Option<String>,
+    options: &ServerOptions,
+) -> Result<Prepared, String> {
     let root = options.root.clone();
     let media_dir = root.join("media");
     let export_dir = root.join("exports");
@@ -187,20 +199,16 @@ pub fn run(ffmpeg: Option<Ffmpeg>, ffmpeg_error: Option<String>, options: Server
     } else {
         println!("  police    : {}", state.font.as_ref().unwrap().display());
     }
-    if options.open_browser {
-        // Fenêtre dédiée d'abord : c'est ce qu'on attend d'un exécutable
-        // qu'on double-clique. Le navigateur à onglets n'est que le repli.
-        let dedicated = open_studio(&url);
-        println!(
-            "  fenêtre   : {}",
-            if dedicated {
-                "mode application (sans onglets ni barre d'adresse)"
-            } else {
-                "navigateur par défaut (aucun navigateur Chromium trouvé)"
-            }
-        );
-    }
 
+    Ok(Prepared {
+        state,
+        listener,
+        url,
+    })
+}
+
+/// Boucle d'acceptation : ne rend jamais la main.
+fn serve_forever(state: Arc<State>, listener: TcpListener) {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
@@ -217,7 +225,76 @@ pub fn run(ffmpeg: Option<Ffmpeg>, ffmpeg_error: Option<String>, options: Server
             Err(error) => eprintln!("connexion refusée : {error}"),
         }
     }
+}
+
+pub fn run(ffmpeg: Option<Ffmpeg>, ffmpeg_error: Option<String>, options: ServerOptions) -> Result<(), String> {
+    let Prepared {
+        state,
+        listener,
+        url,
+    } = prepare(ffmpeg, ffmpeg_error, &options)?;
+
+    if options.open_browser {
+        // Fenêtre dédiée d'abord : c'est ce qu'on attend d'un exécutable
+        // qu'on double-clique. Le navigateur à onglets n'est que le repli.
+        let dedicated = open_studio(&url);
+        println!(
+            "  fenêtre   : {}",
+            if dedicated {
+                "mode application (sans onglets ni barre d'adresse)"
+            } else {
+                "navigateur par défaut (aucun navigateur Chromium trouvé)"
+            }
+        );
+    }
+
+    serve_forever(state, listener);
     Ok(())
+}
+
+/// Sert le studio **et** l'affiche dans une fenêtre native (WebView du système).
+///
+/// Le serveur tourne dans un fil : l'interface reste une page web servie depuis
+/// `127.0.0.1`, mais la fenêtre n'appartient plus à un navigateur — ni onglets,
+/// ni barre d'adresse, ni dépendance à Chrome.
+pub fn run_native(
+    ffmpeg: Option<Ffmpeg>,
+    ffmpeg_error: Option<String>,
+    options: ServerOptions,
+) -> Result<(), String> {
+    let Prepared {
+        state,
+        listener,
+        url,
+    } = prepare(ffmpeg, ffmpeg_error, &options)?;
+
+    thread::spawn(move || serve_forever(state, listener));
+
+    #[cfg(feature = "desktop")]
+    {
+        println!("  fenêtre   : native (WebView du système)");
+        match crate::desktop::run(&url) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                // WebKitGTK absent, pas de session graphique, WebView2 retiré…
+                // Mieux vaut un studio dans le navigateur qu'un refus de
+                // démarrer : on le dit et on bascule.
+                eprintln!("  ⚠ fenêtre native impossible : {error}");
+                eprintln!("    bascule sur le navigateur");
+            }
+        }
+        open_studio(&url);
+        loop {
+            thread::park();
+        }
+    }
+    #[cfg(not(feature = "desktop"))]
+    {
+        let _ = url;
+        Err("ce binaire n'a pas été compilé avec la fenêtre native (option `desktop`) ; \
+             utilisez `serve` pour l'ouvrir dans le navigateur"
+            .into())
+    }
 }
 
 fn handle_connection(state: Arc<State>, stream: TcpStream) -> Result<(), String> {

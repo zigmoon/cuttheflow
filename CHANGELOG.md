@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [CUT THE FLOW 2 — studio web 2.6.0 / moteur 0.9.0] - 2026-10-23
+
+### ✨ Ajouté — une vraie fenêtre d'application, sans navigateur
+
+Le studio ne s'ouvre plus dans un onglet : l'exécutable embarque le moteur de
+rendu du système dans **sa propre fenêtre** (`wry` + `tao`).
+
+| Système | Moteur de rendu | À installer |
+|---|---|---|
+| Windows 10/11 | WebView2 | rien (présent d'origine) |
+| macOS | WKWebView | rien (fait partie du système) |
+| Linux | WebKitGTK 4.1 | `libwebkit2gtk-4.1-0` (défaut sur Ubuntu 24.04+) |
+
+Plus d'onglets, plus de barre d'adresse, plus besoin de Chrome ou Edge. Le mode
+navigateur reste disponible avec `--web` (`cuttheflow --web`), et c'est le mode
+automatique des builds Linux « autonomes » qui ne dépendent d'aucune
+bibliothèque.
+
+Si la fenêtre native est indisponible (WebKitGTK absent, pas de session
+graphique), le studio **le dit et bascule sur le navigateur** au lieu de refuser
+de démarrer.
+
+### ✨ Ajouté — Linux x86-64 « fenêtre native » et Linux ARM64
+
+La CI publie désormais six builds : Windows, macOS Apple Silicon, macOS Intel,
+Linux x86-64 natif (glibc + WebKitGTK), Linux x86-64 autonome (musl statique)
+et Linux ARM64 autonome.
+
+### 🎨 Modifié — icône des préférences
+
+Le bouton des préférences utilisait un glyphe qui se lisait comme un soleil.
+C'est maintenant une **roue dentée** sans ambiguïté (anneau extérieur, moyeu
+central, huit dents).
+
+### 🔧 Corrigé — dépendances Windows de la fenêtre native
+
+Le binaire Windows importe `WebView2Loader.dll` : sans elle, double-clic sans
+effet et aucun message (`0xC0000135`). L'archive la contient désormais, aux
+côtés de `libunwind.dll`, et `build.ps1` comme la CI la joignent
+automatiquement.
+
+### 🔧 Service worker `ctf2-v9`
+
+Purge du cache pour les visiteurs déjà passés sur la PWA.
+
+---
+
 ## [CUT THE FLOW 2 — studio web 2.5.1 / moteur 0.8.0] - 2026-10-23
 
 ### 🐛 Corrigé — le studio s'ouvrait dans un onglet de navigateur

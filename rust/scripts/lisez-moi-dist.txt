@@ -11,30 +11,36 @@ Linux     dans un terminal :  bash demarrer.sh
 macOS     double-cliquez sur  demarrer.command
           (ou dans le Terminal :  bash demarrer.command)
 
-Le studio s'ouvre dans SA PROPRE FENÊTRE — sans onglets ni barre d'adresse,
-comme une application. Il s'appuie sur Chrome, Edge, Brave ou Chromium déjà
-installé, en « mode application ». Si aucun de ces navigateurs n'est présent,
-le studio s'ouvre dans votre navigateur par défaut : même contenu, avec des
-onglets en plus.
+Le studio s'ouvre dans SA PROPRE FENÊTRE D'APPLICATION — sans onglets ni barre
+d'adresse. Il n'utilise aucun navigateur externe :
+
+  Windows   moteur WebView2, déjà présent sur Windows 10 et 11
+  macOS     WKWebView, intégré au système
+  Linux     WebKitGTK (voir la note ci-dessous)
 
 Laissez la fenêtre noire (ou le terminal) ouverte pendant le montage :
 la fermer arrête le studio.
 
-POURQUOI UNE FENÊTRE DE NAVIGATEUR ?
-------------------------------------
-Ce n'est pas un oubli : l'interface du studio est une application web, et elle
-a besoin d'un moteur de rendu pour s'afficher. L'exécutable fournit le moteur
-d'export (Rust + ffmpeg) et sert l'interface depuis votre machine, sur
-http://127.0.0.1:7317/ — une adresse locale, invisible depuis Internet.
-Rien n'est envoyé nulle part et aucune donnée ne quitte l'ordinateur.
+MODE NAVIGATEUR (OPTIONNEL)
+---------------------------
+Si vous préférez votre navigateur habituel, ajoutez l'option --web :
 
-Vous pouvez installer le studio comme application (icône, fenêtre sans
-navigateur visible) : dans la fenêtre du studio, ouvrez le menu du navigateur
-puis « Installer CUT THE FLOW » (Chrome / Edge).
+  Windows   cuttheflow.exe --web
+  Linux     ./cuttheflow --web
+  macOS     ./cuttheflow --web
 
-IMPORTANT (Windows) : gardez cuttheflow.exe ET libunwind.dll dans le même
-dossier. Sans le .dll, Windows refuse de démarrer l'exécutable sans expliquer
-pourquoi. Si vous déplacez l'exécutable, déplacez les deux.
+Le studio s'ouvre alors sur http://127.0.0.1:7317/ — une adresse locale,
+invisible depuis Internet. C'est aussi le mode automatique de la version Linux
+« autonome » (celle qui ne dépend d'aucune bibliothèque).
+
+NOTE LINUX (fenêtre native)
+---------------------------
+La fenêtre native demande WebKitGTK 4.1, fourni par la distribution :
+
+  sudo apt install libwebkit2gtk-4.1-0     (Ubuntu 24.04+, Debian 13+)
+
+S'il est absent, le studio vous le signale et bascule sur le navigateur au
+lieu de refuser de démarrer.
 
 IMPORTANT (macOS) : au premier lancement, macOS peut afficher « développeur non
 identifié ». Le lanceur lève lui-même ce blocage pour ce binaire. Si le
@@ -45,11 +51,16 @@ FICHIERS
 --------
   cuttheflow           le moteur et l'interface (Windows : cuttheflow.exe)
   libunwind.dll        Windows uniquement — dépendance de l'exécutable
+  WebView2Loader.dll   Windows uniquement — ouvre la fenêtre native
   DEMARRER.cmd         lanceur Windows
   demarrer.sh          lanceur Linux
   demarrer.command     lanceur macOS
   LISEZ-MOI.txt        ce fichier
   LICENSE              licence du logiciel
+
+Windows : gardez cuttheflow.exe ET les deux .dll dans le même dossier. Sans
+libunwind.dll ou WebView2Loader.dll, Windows refuse de démarrer l'exécutable
+sans expliquer pourquoi. Si vous déplacez l'exécutable, déplacez les trois.
 
 FFMPEG : OPTIONNEL
 ------------------

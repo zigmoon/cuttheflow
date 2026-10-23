@@ -53,7 +53,9 @@ if (-not $SkipWeb) {
 }
 
 Write-Step "Binaire Windows ($toolchain)"
-cargo "+$toolchain" build --release -p ctf-app
+# `--features desktop` : fenêtre native WebView2. Sans la feature, le binaire
+# n'est qu'un serveur (mode navigateur).
+cargo "+$toolchain" build --release -p ctf-app --features desktop
 if ($LASTEXITCODE -ne 0) { throw 'échec de la compilation Windows' }
 
 $linuxBuilt = @()
@@ -113,6 +115,18 @@ if (Test-Path $unwind) {
     Write-Host '  ⚠ libunwind.dll introuvable : le binaire Windows ne démarrera pas hors machine de build.' -ForegroundColor Yellow
 }
 
+# WebView2Loader.dll : chargée au démarrage par la fenêtre native (wry lie
+# l'import library, pas la version statique). Le runtime WebView2, lui, est
+# fourni par Windows 10/11 — c'est cette petite DLL qui manquerait.
+$loader = Get-ChildItem "$env:USERPROFILE\.cargo\registry\src" -Recurse -Filter 'WebView2Loader.dll' -ErrorAction SilentlyContinue |
+    Where-Object { $_.DirectoryName -match '\\x64$' } |
+    Select-Object -First 1
+if ($loader) {
+    Copy-Item $loader.FullName (Join-Path $dist 'WebView2Loader.dll') -Force
+} else {
+    Write-Host '  ⚠ WebView2Loader.dll introuvable : la fenêtre native ne démarrera pas.' -ForegroundColor Yellow
+}
+
 Copy-Item (Join-Path $PSScriptRoot 'lisez-moi-dist.txt') (Join-Path $dist 'LISEZ-MOI.txt') -Force
 $cuttheflowRoot = Split-Path -Parent $root
 Copy-Item (Join-Path $cuttheflowRoot 'LICENSE') (Join-Path $dist 'LICENSE') -Force
@@ -140,7 +154,7 @@ New-Item -ItemType Directory -Force -Path $packDir | Out-Null
 Get-ChildItem $packDir -Filter 'CUTTHEFLOW-*.zip' -ErrorAction SilentlyContinue | Remove-Item -Force
 
 $packages = @(
-    @{ name = 'windows-x86_64'; exe = 'cuttheflow-windows-x86_64.exe'; target = 'cuttheflow.exe'; extra = @('libunwind.dll'); launcher = 'DEMARRER.cmd' },
+    @{ name = 'windows-x86_64'; exe = 'cuttheflow-windows-x86_64.exe'; target = 'cuttheflow.exe'; extra = @('libunwind.dll', 'WebView2Loader.dll'); launcher = 'DEMARRER.cmd' },
     @{ name = 'linux-x86_64';   exe = 'cuttheflow-linux-x86_64';       target = 'cuttheflow';     extra = @();                 launcher = 'demarrer.sh' },
     @{ name = 'linux-aarch64';  exe = 'cuttheflow-linux-aarch64';      target = 'cuttheflow';     extra = @();                 launcher = 'demarrer.sh' },
     @{ name = 'macos-arm64';    exe = 'cuttheflow-macos-arm64';        target = 'cuttheflow';     extra = @();                 launcher = 'demarrer.command' },
