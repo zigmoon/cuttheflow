@@ -194,6 +194,17 @@ Les deux niveaux sont indépendants : sans secrets, le workflow publie des
 binaires exécutables, simplement non notariés. C'est le comportement demandé
 (« signature si ça marche, sinon sans »).
 
+## Version 2.5.1 — 23 octobre 2026 (studio ; moteur inchangé 0.7.0)
+
+| Changement | Détail |
+|---|---|
+| **Pastille « offline » corrigée** | sur un hébergement statique, le studio affichait « offline » en rouge alors qu'aucun moteur n'est attendu et que tout fonctionne dans le navigateur. L'ordre des tests dans `updateEngineBadge()` est inversé : mode navigateur → pastille neutre « dans le navigateur » ; rouge réservé au moteur attendu mais perdu |
+| Infobulles | les deux cas ont un libellé traduit (plus d'anglais codé en dur) |
+| Service worker | `VERSION` = `ctf2-v8` |
+
+Le moteur Rust n'a pas changé : seuls l'interface et le service worker sont
+modifiés. Les binaires sont reconstruits parce que `astro/dist` y est embarqué.
+
 ## Version 0.7.0 — 22 octobre 2026
 
 | Changement | Détail |

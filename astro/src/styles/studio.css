@@ -532,6 +532,17 @@ svg {
   color: var(--danger);
 }
 
+/* Mode navigateur : information, pas alerte. Le studio est pleinement
+   fonctionnel, l'encodage se fait dans l'onglet. */
+.engine-badge[data-state='browser'] .engine-dot {
+  background: var(--success);
+  opacity: 0.55;
+}
+
+.engine-badge[data-state='browser'] {
+  color: var(--text-faint);
+}
+
 .doc-identity {
   flex: 1 1 auto;
   min-width: 0;

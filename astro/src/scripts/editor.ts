@@ -826,18 +826,24 @@ class Editor implements TimelineHost {
 
   private updateEngineBadge(): void {
     const badge = els.engineBadge;
-    if (!this.engineOk) {
-      badge.dataset.state = 'bad';
-      els.engineLabel.textContent = t('engine.off');
-      badge.title = this.engineFfmpeg ? 'Run `cuttheflow serve` then reload the page.' : '';
-      return;
-    }
-    badge.dataset.state = 'ok';
+    // Le mode navigateur n'est PAS une panne : c'est le fonctionnement normal
+    // d'un hébergement statique (app.zigmoon.com) ou d'un binaire lancé sans
+    // ffmpeg. Afficher « hors ligne » en rouge y serait faux — rien n'est hors
+    // ligne, le studio est pleinement utilisable — et alarmant pour rien.
     if (this.mode === 'local') {
+      badge.dataset.state = 'browser';
       els.engineLabel.textContent = t('engine.local');
       badge.title = t('engine.localTitle');
       return;
     }
+    // Ici un moteur était attendu : son absence est une vraie panne.
+    if (!this.engineOk) {
+      badge.dataset.state = 'bad';
+      els.engineLabel.textContent = t('engine.off');
+      badge.title = t('engine.lostTitle');
+      return;
+    }
+    badge.dataset.state = 'ok';
     els.engineLabel.textContent = t('engine.on');
     badge.title = `${this.engineFfmpeg}\n${this.engineFont ? `font: ${this.engineFont}` : 'font: none'}`;
   }

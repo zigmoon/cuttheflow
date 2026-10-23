@@ -437,10 +437,14 @@ const STRINGS: Record<string, Entry> = {
   'prefs.engine': { en: 'Engine: {info}', fr: 'Moteur : {info}' },
   'engine.on': { en: 'engine', fr: 'moteur' },
   'engine.off': { en: 'offline', fr: 'hors ligne' },
-  'engine.local': { en: 'browser', fr: 'navigateur' },
+  'engine.local': { en: 'in browser', fr: 'dans le navigateur' },
   'engine.localTitle': {
-    en: 'No Rust engine: import and export run in this browser (WebCodecs).',
-    fr: 'Aucun moteur Rust : l’import et l’export se font dans ce navigateur (WebCodecs).',
+    en: 'Normal for the online studio: import and export run in this browser (WebCodecs). Nothing to install — keep the tab open while exporting.',
+    fr: 'Normal pour le studio en ligne : l’import et l’export se font dans ce navigateur (WebCodecs). Rien à installer — gardez l’onglet ouvert pendant l’export.',
+  },
+  'engine.lostTitle': {
+    en: 'The Rust engine stopped responding. Restart it (`cuttheflow serve`) then reload this page.',
+    fr: 'Le moteur Rust ne répond plus. Relancez-le (`cuttheflow serve`) puis rechargez cette page.',
   },
   'export.browserHint': {
     en: 'Encoding happens in your browser — keep this tab open until it finishes.',

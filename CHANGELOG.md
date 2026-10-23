@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [CUT THE FLOW 2 — studio web 2.5.1] - 2026-10-23
+
+### 🐛 Corrigé — pastille « offline » en rouge sur la version en ligne
+
+Le studio déployé sur un hébergement statique (`app.zigmoon.com/CUTTHEFLOW`)
+affichait **« offline » en rouge** dans la barre supérieure. C'était faux et
+alarmant : dans ce mode il n'y a **aucun moteur à joindre**, l'import et
+l'export se font dans le navigateur (WebCodecs), et le studio est pleinement
+utilisable.
+
+Cause : `updateEngineBadge()` testait `engineOk` **avant** le mode. Sur un site
+statique, `/api/health` n'existe pas, donc `engineOk` est faux par construction
+→ branche d'erreur. L'ordre est inversé et la sémantique clarifiée :
+
+| Situation | Avant | Maintenant |
+|---|---|---|
+| Site statique, aucun moteur | 🔴 « offline » | pastille neutre « dans le navigateur », infobulle explicative |
+| Binaire lancé, ffmpeg absent | 🔴 « offline » | idem — le studio fonctionne, un message d'information le dit |
+| Moteur joignable | 🟢 « moteur » | inchangé |
+| Moteur attendu mais perdu | 🔴 « offline » | inchangé (seul vrai cas de panne) |
+
+- L'infobulle anglaise codée en dur (`Run cuttheflow serve…`) est remplacée par
+  deux libellés traduits (`engine.localTitle`, `engine.lostTitle`).
+- Service worker : `VERSION` passe à `ctf2-v8`.
+
+---
+
 ## [CUT THE FLOW 2 — studio web 2.5.0 / moteur 0.7.0] - 2026-10-22
 
 ### ✨ Ajouté
