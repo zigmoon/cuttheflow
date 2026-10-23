@@ -27,7 +27,6 @@
   <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-t%C3%A9l%C3%A9charger-2f6feb?style=for-the-badge&logo=windows&logoColor=white"></a>
   <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.zip"><img alt="Download for macOS" src="https://img.shields.io/badge/macOS-t%C3%A9l%C3%A9charger-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
   <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64-desktop.zip"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-t%C3%A9l%C3%A9charger-f0a030?style=for-the-badge&logo=linux&logoColor=white"></a>
-  <a href="https://github.com/zigmoon/cuttheflow/releases/latest"><img alt="All builds" src="https://img.shields.io/badge/toutes%20les%20versions-6%20cibles-8957e5?style=for-the-badge"></a>
 </p>
 
 <p align="center">
@@ -39,6 +38,7 @@
   <a href="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml"><img alt="Build" src="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml/badge.svg?branch=main"></a>
   <img alt="Latest release" src="https://img.shields.io/github/v/release/zigmoon/cuttheflow?label=version&color=2ea043">
   <img alt="Downloads" src="https://img.shields.io/github/downloads/zigmoon/cuttheflow/total?label=t%C3%A9l%C3%A9chargements&color=2ea043">
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest"><img alt="All releases" src="https://img.shields.io/badge/toutes%20les%20versions-6%20cibles-8957e5"></a>
   <img alt="License" src="https://img.shields.io/badge/license-proprietary-8957e5">
 </p>
 
