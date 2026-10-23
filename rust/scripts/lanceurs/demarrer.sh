@@ -3,8 +3,9 @@
 #
 #   bash demarrer.sh        (ou ./demarrer.sh si le fichier est exécutable)
 #
-# Le studio s'ouvre dans votre navigateur. Rien n'est installé ni envoyé
-# sur Internet : tout reste sur cette machine.
+# Le studio s'ouvre dans sa propre fenêtre (WebKitGTK) ; si WebKitGTK est
+# absent, il bascule sur votre navigateur. Rien n'est installé ni envoyé sur
+# Internet : tout reste sur cette machine.
 
 set -u
 cd "$(dirname "$0")" || exit 1
@@ -23,11 +24,12 @@ chmod +x ./cuttheflow 2>/dev/null || true
 
 echo
 echo "  CUT THE FLOW - démarrage du studio..."
-echo "  Une fenêtre dédiée va s'ouvrir (mode application, sans onglets)."
+echo "  Une fenêtre d'application va s'ouvrir (sans onglets ni barre d'adresse)."
 echo "  Laissez ce terminal ouvert pendant le montage ; Ctrl+C pour arrêter."
 echo
 
-./cuttheflow serve --open
+# Sans argument : fenêtre native si elle est compilée, navigateur sinon.
+./cuttheflow
 code=$?
 
 if [ "$code" -ne 0 ]; then

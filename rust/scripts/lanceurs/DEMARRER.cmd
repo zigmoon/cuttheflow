@@ -1,6 +1,6 @@
 @echo off
 rem CUT THE FLOW - lanceur Windows.
-rem Double-cliquez sur ce fichier : le studio s'ouvre dans votre navigateur.
+rem Double-cliquez sur ce fichier : le studio s'ouvre dans sa propre fenetre.
 rem Rien n'est installe, rien n'est envoye sur Internet.
 
 setlocal
@@ -16,22 +16,19 @@ if not exist "cuttheflow.exe" (
 )
 
 if not exist "libunwind.dll" (
-  echo.
-  echo   libunwind.dll est absent : l'executable ne peut pas demarrer.
-  echo   Extrayez TOUTE l'archive, y compris les fichiers .dll.
-  echo.
-  pause
-  exit /b 1
+  echo   [info] libunwind.dll absent : liee en dur dans cette compilation,
+  echo          le studio demarre quand meme.
 )
 
 echo.
 echo   CUT THE FLOW - demarrage du studio...
-echo   Une fenetre dediee va s'ouvrir (mode application, sans onglets).
+echo   Une fenetre d'application va s'ouvrir (sans onglets ni barre d'adresse).
 echo   Laissez cette fenetre noire ouverte pendant le montage.
 echo   Fermez-la pour arreter le studio.
 echo.
 
-cuttheflow.exe serve --open
+rem Sans argument : fenetre native si elle est compilee, navigateur sinon.
+cuttheflow.exe
 set CODE=%ERRORLEVEL%
 
 if not "%CODE%"=="0" (

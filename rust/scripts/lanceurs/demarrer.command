@@ -31,11 +31,12 @@ fi
 
 echo
 echo "  CUT THE FLOW - démarrage du studio..."
-echo "  Une fenêtre dédiée va s'ouvrir (mode application, sans onglets)."
+echo "  Une fenêtre d'application va s'ouvrir (sans onglets ni barre d'adresse)."
 echo "  Laissez cette fenêtre ouverte pendant le montage ; Ctrl+C pour arrêter."
 echo
 
-./cuttheflow serve --open
+# Sans argument : fenêtre native (WKWebView), navigateur si non compilée.
+./cuttheflow
 code=$?
 
 if [ "$code" -ne 0 ]; then
