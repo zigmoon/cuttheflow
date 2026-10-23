@@ -398,6 +398,26 @@ jobs:
           make_latest: true
           fail_on_unmatched_files: true
 
+      # Un fichier publié lors d'une construction précédente et qui n'existe
+      # plus aujourd'hui resterait sinon en ligne pour toujours (cas de la DLL
+      # WebView2, devenue inutile avec MSVC).
+      - name: Ménage des fichiers obsolètes
+        if: env.RELEASE_TAG != 'latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd artefacts
+          ls -1 > "$RUNNER_TEMP/attendu.txt"
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/publie.txt"
+          while IFS= read -r fichier; do
+            [ -z "$fichier" ] && continue
+            if ! grep -qxF "$fichier" "$RUNNER_TEMP/attendu.txt"; then
+              echo "suppression de l'ancien fichier : $fichier"
+              gh release delete-asset "$RELEASE_TAG" "$fichier" --yes || true
+            fi
+          done < "$RUNNER_TEMP/publie.txt"
+
       # Une fois la nouvelle release publiée, on retire l'ancienne étiquette
       # glissante « latest » des débuts : elle doublonnait dans la liste.
       # Best-effort : son échec ne remet pas en cause la publication.
