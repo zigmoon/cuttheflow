@@ -13,29 +13,38 @@
 </p>
 
 > **How it runs.** CUT THE FLOW is a local studio: the executable ships the
-> render engine *and* serves the interface from `127.0.0.1`, then opens it in a
-> dedicated window (Chrome / Edge / Brave app mode — no tabs, no address bar).
+> render engine *and* serves the interface from `127.0.0.1`, then shows it in
+> **its own application window** — WebView2 on Windows 10/11, WKWebView on
+> macOS, WebKitGTK on Linux. No tabs, no address bar, no browser to install.
 > Nothing leaves your machine. There is no Electron or Qt shell: the UI is web,
-> which is what makes one binary enough for three systems. If no Chromium-based
-> browser is installed, the studio opens in your default browser instead — same
-> thing, with tabs.
+> which is what makes one binary enough for three systems. `--web` opens the
+> studio in your default browser instead, and a machine without a usable system
+> WebView falls back to it automatically — announced, never silent.
 
 <!-- Les liens de téléchargement pointent sur la release « latest », reconstruite
      à chaque poussée sur main. Ils ne changent jamais. -->
 <p align="center">
-  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-télécharger-2f6feb?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.zip"><img alt="Download for macOS" src="https://img.shields.io/badge/macOS-télécharger-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64.zip"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-télécharger-f0a030?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-windows-x86_64.zip"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-t%C3%A9l%C3%A9charger-2f6feb?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-macos-arm64.zip"><img alt="Download for macOS" src="https://img.shields.io/badge/macOS-t%C3%A9l%C3%A9charger-000000?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest/download/CUTTHEFLOW-linux-x86_64-desktop.zip"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-t%C3%A9l%C3%A9charger-f0a030?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <a href="https://github.com/zigmoon/cuttheflow/releases/latest"><img alt="All builds" src="https://img.shields.io/badge/toutes%20les%20versions-6%20cibles-8957e5?style=for-the-badge"></a>
+</p>
+
+<p align="center">
+  <sub>macOS Apple Silicon or Intel · Linux x86-64 (native window or self-contained) · Linux ARM64 —
+  every archive is in the table below.</sub>
 </p>
 
 <p align="center">
   <a href="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml"><img alt="Build" src="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml/badge.svg?branch=main"></a>
   <img alt="Latest release" src="https://img.shields.io/github/v/release/zigmoon/cuttheflow?label=version&color=2ea043">
-  <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6feb">
+  <img alt="Downloads" src="https://img.shields.io/github/downloads/zigmoon/cuttheflow/total?label=t%C3%A9l%C3%A9chargements&color=2ea043">
   <img alt="License" src="https://img.shields.io/badge/license-proprietary-8957e5">
 </p>
 
 <p align="center">
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6feb">
+  <img alt="Native window" src="https://img.shields.io/badge/WebView2%20%C2%B7%20WKWebView%20%C2%B7%20WebKitGTK-fen%C3%AAtre%20native-2f6feb">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-1.80%2B-b7410e?logo=rust&logoColor=white">
   <img alt="Astro" src="https://img.shields.io/badge/Astro-7-ff5d01?logo=astro&logoColor=white">
   <img alt="ffmpeg" src="https://img.shields.io/badge/ffmpeg-optional-007808?logo=ffmpeg&logoColor=white">
@@ -169,7 +178,8 @@ model.
 ## Command line
 
 ```bash
-cuttheflow                       # serve + open the studio
+cuttheflow                       # native window (browser if the build has none)
+cuttheflow --web                  # force the default browser instead
 cuttheflow serve --port 7317 --no-open
 cuttheflow doctor                # ffmpeg, encoders, font
 cuttheflow probe film.mp4        # metadata as JSON
@@ -177,7 +187,9 @@ cuttheflow export projet.json --out montage.mp4 --format mp4 --crf 18
 ```
 
 `serve` starts even when ffmpeg is missing: it announces browser mode instead of
-refusing to launch.
+refusing to launch. The same is true of the native window — if WebKitGTK is
+absent on Linux, or there is no graphical session, the studio says so and opens
+in the browser rather than exiting.
 
 ---
 
@@ -187,14 +199,20 @@ Prerequisites: Rust 1.80+, Node 20.3+.
 
 ```bash
 npm ci --prefix astro && npm run build --prefix astro
-cargo build --release --manifest-path rust/Cargo.toml -p ctf-app
-./rust/target/release/cuttheflow serve --open
+cargo build --release --manifest-path rust/Cargo.toml -p ctf-app                    # server only
+cargo build --release --manifest-path rust/Cargo.toml -p ctf-app --features desktop # native window
+./rust/target/release/cuttheflow
 ```
 
-`rust/scripts/build.ps1` builds all five targets **and** the ready-to-ship
-archives (this is what the local release looks like). `.github/workflows/build.yml`
-does the same on GitHub's runners, natively on each OS, and publishes the
-release.
+`--features desktop` pulls in `wry` + `tao`. It needs WebKitGTK 4.1 and GTK 3
+development headers on Linux (`libwebkit2gtk-4.1-dev libgtk-3-dev`); Windows and
+macOS need nothing extra, the system WebView is part of the OS.
+
+`rust/scripts/build.ps1` is the local shortcut: it builds the Windows binary
+*native* plus cross-compiled Linux and macOS binaries (without the native
+window — that one needs the host toolchain). `.github/workflows/build.yml` is
+the reference: it builds all **six** targets natively on their own OS, including
+the Linux native-window build, then publishes the release.
 
 ---
 
@@ -208,14 +226,18 @@ rust/
   crates/ctf-core     model, timeline resolver, ffprobe parsing, filter graph
   crates/ctf-engine   ffmpeg execution: audio mix, composition, export
   crates/ctf-app      binary: CLI + local HTTP server, embeds astro/dist
+    desktop.rs        native window: WebView2 / WKWebView / WebKitGTK
   scripts/            build.ps1, launchers, distribution notes
-v1/               previous browser-only generation, kept for reference
 ```
 
 The interface and the engine share one model: `state.ts` and `model.rs` describe
 the same project, and the preview composites with the same placement rules the
 export uses. `astro/dist` is embedded in the binary at compile time, so a single
 file carries the whole studio.
+
+The native window does not replace the server: `server.rs` binds `127.0.0.1`,
+then `desktop.rs` points a WebView at it. That is why the same interface works in
+all three shells, and why `--web` is a one-line switch.
 
 ---
 
@@ -236,14 +258,18 @@ audio tracks with 880/1500/1200 Hz beacons) and inspects the files with ffmpeg.
 
 ```bash
 cd rust
-cargo test --workspace                # 31 unit tests
+cargo test --workspace                # 32 unit tests
 node scripts/verify-export.mjs        # 45 ffmpeg checks
 ```
 
-Interface: `npm run check` → 0 error, 0 warning. Effects and transitions were
-verified on real pixels (sepia `44,39,30`; ellipse `#F0F0F2`; a 0.5 s dissolve
-reading `29,29,29` → `121,13,68` → `201,0,102`, i.e. the two sources really
-mixed). Static fidelity in browser export: PSNR **43.6 dB**, SSIM **0.996**.
+Interface: `npm run check` → 0 error, 0 warning; `node tools/v3-test.cjs` →
+**32/32** in a real Chrome (drag-and-drop, zoom, scrub-while-playing, undo,
+keyframes, masks, service-worker update, engine badge states). Effects and
+transitions were verified on real pixels (sepia `44,39,30`; ellipse `#F0F0F2`; a
+0.5 s dissolve reading `29,29,29` → `121,13,68` → `201,0,102`, i.e. the two
+sources really mixed). Static fidelity in browser export: PSNR **43.6 dB**,
+SSIM **0.996**. Each release binary is then checked on its own: `--version`,
+forbidden imports, and the studio actually booting in the window.
 
 ---
 
@@ -275,13 +301,19 @@ written by the browser can be exported by the CLI and vice versa.
 
 ## Limits
 
-- keyframes, masks and speed are rendered by the **browser** (WebCodecs) even
-  when the engine is available: ffmpeg support for them is not there yet, and
-  the export dialog says so instead of silently producing a wrong file
+- keyframes, masks and speed are rendered by the **browser inside the window**
+  (WebCodecs) even when the engine is available: ffmpeg support for them is not
+  there yet, and the export dialog says so instead of silently producing a wrong
+  file
+- the Linux *native window* build needs WebKitGTK 4.1 and GTK 3 at run time. The
+  *self-contained* build exists exactly for machines that have neither — it
+  depends on nothing and opens the studio in the browser
 - macOS builds are signed ad-hoc; Developer ID signing and notarisation happen
   in CI only when the Apple secrets are configured
 - Windows builds are unsigned: SmartScreen may ask for confirmation
 - 4K H.264 encoding depends on the browser; VP9 handles it more often
+- there is no auto-updater: the studio tells you when a newer release exists, you
+  download it from the releases page
 
 ---
 
