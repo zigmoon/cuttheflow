@@ -50,17 +50,18 @@ ouvrez le Terminal dans ce dossier et tapez :  bash demarrer.command
 FICHIERS
 --------
   cuttheflow           le moteur et l'interface (Windows : cuttheflow.exe)
-  libunwind.dll        Windows uniquement — dépendance de l'exécutable
-  WebView2Loader.dll   Windows uniquement — ouvre la fenêtre native
+  libunwind.dll        Windows — dépendance, si ce fichier est présent
+  WebView2Loader.dll   Windows — ouvre la fenêtre native, si présent
   DEMARRER.cmd         lanceur Windows
   demarrer.sh          lanceur Linux
   demarrer.command     lanceur macOS
   LISEZ-MOI.txt        ce fichier
   LICENSE              licence du logiciel
 
-Windows : gardez cuttheflow.exe ET les deux .dll dans le même dossier. Sans
-libunwind.dll ou WebView2Loader.dll, Windows refuse de démarrer l'exécutable
-sans expliquer pourquoi. Si vous déplacez l'exécutable, déplacez les trois.
+Windows : ne séparez jamais cuttheflow.exe des .dll qui l'accompagnent. Si vous
+déplacez l'exécutable, déplacez tout le dossier. (Selon la chaîne de
+compilation, l'une de ces DLL peut être liée en dur et donc absente : c'est
+normal, le studio démarre quand même.)
 
 FFMPEG : OPTIONNEL
 ------------------
@@ -103,8 +104,11 @@ et refuse les connexions venant d'ailleurs.
 
 EN CAS DE PROBLÈME
 ------------------
-  • Rien ne se passe au double-clic (Windows) : libunwind.dll manque, ou
-    l'archive a été ouverte sans être extraite. Extrayez tout le dossier.
+  • Rien ne se passe au double-clic (Windows) : l'archive a probablement été
+    ouverte sans être extraite. Extrayez tout le dossier, puis relancez.
+  • Fenêtre native impossible (Linux) : WebKitGTK 4.1 manque. Installez-le
+    (sudo apt install libwebkit2gtk-4.1-0) ; en attendant, le studio s'ouvre
+    dans votre navigateur.
   • « ffmpeg est introuvable » : normal sans ffmpeg, le studio bascule en mode
     navigateur. Installez ffmpeg pour utiliser le moteur natif.
   • Le port 7317 est déjà pris :  cuttheflow serve --port 7320

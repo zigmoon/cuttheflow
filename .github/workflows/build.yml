@@ -267,22 +267,25 @@ jobs:
           chmod +x "dist/${{ matrix.binary }}" "$STAGE/${{ matrix.bin }}" || true
           ls -l dist "$STAGE"
 
-      # Chargeur WebView2 : selon la version de la crate, l'import reste
-      # dynamique. On le joint systématiquement quand il existe pour éviter le
-      # démarrage silencieusement avorté (0xC0000135) chez l'utilisateur.
-      - name: Chargeur WebView2 (Windows)
+      # Chargeur WebView2 : l'import est dynamique avec MinGW, statique avec
+      # MSVC. On ne joint la DLL que si le binaire la réclame réellement — inutile
+      # d'alourdir l'archive et de laisser croire à une dépendance obligatoire.
+      - name: Chargeur WebView2 (Windows, si requis)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $exe = "rust/target/${{ matrix.target }}/release/${{ matrix.bin }}"
+          $ascii = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($exe))
+          if (-not $ascii.Contains('WebView2Loader.dll')) {
+            Write-Host "Import statique : la DLL n'est pas nécessaire, rien n'est joint."
+            exit 0
+          }
           $loader = Get-ChildItem "$env:USERPROFILE\.cargo\registry\src" -Recurse -Filter 'WebView2Loader.dll' -ErrorAction SilentlyContinue |
             Where-Object { $_.DirectoryName -match '\\x64$' } | Select-Object -First 1
-          if ($loader) {
-            Copy-Item $loader.FullName 'dist/WebView2Loader.dll' -Force
-            Copy-Item $loader.FullName (Join-Path $env:RUNNER_TEMP 'pkg/WebView2Loader.dll') -Force
-            Write-Host "WebView2Loader.dll joint (depuis $($loader.FullName))"
-          } else {
-            Write-Host "WebView2Loader.dll absent du registre : import statique probable."
-          }
+          if (-not $loader) { throw "Le binaire importe WebView2Loader.dll mais la DLL est introuvable." }
+          Copy-Item $loader.FullName 'dist/WebView2Loader.dll' -Force
+          Copy-Item $loader.FullName (Join-Path $env:RUNNER_TEMP 'pkg/WebView2Loader.dll') -Force
+          Write-Host "WebView2Loader.dll joint (depuis $($loader.FullName))"
 
       - name: Archive (Linux, macOS)
         if: matrix.compress == 'zip'
