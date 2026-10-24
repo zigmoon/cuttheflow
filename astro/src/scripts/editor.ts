@@ -2591,10 +2591,15 @@ class Editor implements TimelineHost {
                 width: output.width,
                 height: output.height,
               });
+          // Sans attribut `download`, le navigateur prend le nom du
+          // `Content-Disposition` du serveur : « cuttheflow-j1a16fc15a251.mp4 »,
+          // illisible. On reprend le nom du projet, comme le fait le rendu
+          // navigateur.
+          const fileName = `${sanitizeFileName(this.project.name)}.${output.format}`;
           els.exportResult.innerHTML = `
             <strong>${escapeHtml(t('export.done'))}</strong> — ${output.format.toUpperCase()}<br />
             ${details}
-            <a href="${api.jobFileUrl(jobId)}" download>${escapeHtml(t('export.download'))}</a>
+            <a href="${api.jobFileUrl(jobId)}" download="${escapeHtml(fileName)}">${escapeHtml(t('export.download'))}</a>
           `;
           els.exportResult.hidden = false;
           this.setStatus(t('status.exportDone', { size }));

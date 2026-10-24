@@ -6,6 +6,13 @@
  * bandeau, et ne bascule qu'au clic — un rechargement surprise au milieu d'un
  * montage serait pire que pas de mise à jour du tout.
  *
+ * **Dans l'application de bureau, aucun worker n'est enregistré.** Les fichiers
+ * sont embarqués dans le binaire : le cache ne sert à rien, et il peut servir une
+ * interface périmée après une mise à jour de l'application. C'était le cas : un
+ * binaire neuf affichait « une nouvelle version est prête », avec l'ancien worker
+ * encore actif et deux caches sur trois périmés. Les workers et les caches d'une
+ * version précédente sont donc supprimés au démarrage.
+ *
  * Uniquement en production : en développement (`astro dev`), un worker qui met
  * `index.html` en cache masquerait les changements. L'échec est silencieux :
  * sans service worker le studio reste entièrement fonctionnel.
@@ -16,10 +23,64 @@ import { t } from './i18n';
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const CHECK_MIN_GAP_MS = 5 * 60 * 1000;
 
+const SHELL_PREFIX = 'ctf2-';
+
+/**
+ * Vrai quand la page est servie par le binaire (application de bureau).
+ *
+ * `/api/health` n'existe qu'en mode moteur : en hébergement statique il répond
+ * 404. On exige du JSON avec notre marqueur, pour qu'une page d'erreur HTML
+ * renvoyée en 200 par un hébergeur ne soit pas prise pour un moteur.
+ */
+async function servedByBinary(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 1500);
+    const response = await fetch(new URL('api/health', document.baseURI).toString(), {
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    window.clearTimeout(timer);
+    if (!response.ok) return false;
+    const payload = (await response.json()) as { app?: string };
+    return payload.app === 'cuttheflow';
+  } catch {
+    return false;
+  }
+}
+
+/** Supprime workers et caches hérités d'une version précédente de l'application. */
+async function clearAppCaches(): Promise<void> {
+  try {
+    const names = await caches.keys();
+    await Promise.all(
+      names.filter((name) => name.startsWith(SHELL_PREFIX)).map((name) => caches.delete(name)),
+    );
+  } catch {
+    // Stockage indisponible : sans conséquence, le binaire sert les fichiers.
+  }
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+  } catch {
+    // Idem : l'application fonctionne sans worker.
+  }
+}
+
 export function registerServiceWorker(): void {
   if (!('serviceWorker' in navigator)) return;
   if (!import.meta.env.PROD) return;
 
+  void (async () => {
+    if (await servedByBinary()) {
+      await clearAppCaches();
+      return;
+    }
+    registerUpdater();
+  })();
+}
+
+function registerUpdater(): void {
   const scriptUrl = new URL('service-worker.js', document.baseURI).toString();
   const banner = document.getElementById('updateBanner');
   const reloadBtn = document.getElementById('updateReload') as HTMLButtonElement | null;

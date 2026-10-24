@@ -21,7 +21,7 @@
  * sont résolues depuis `self.registration.scope`, jamais depuis la racine.
  */
 
-const VERSION = 'ctf2-v14';
+const VERSION = 'ctf2-v15';
 
 /** Cache du shell : purgé à chaque nouvelle version. */
 const SHELL_CACHE = VERSION;

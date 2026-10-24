@@ -7,7 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [CUT THE FLOW 2 — studio web 2.7.1 / moteur 0.10.1] - 2026-10-24
+## [CUT THE FLOW 2 — studio web 2.7.2 / moteur 0.10.2] - 2026-10-25
+
+### 🐛 Corrigé — l'application proposait « une nouvelle version est prête », sans fin
+
+Constaté sur l'application Windows installée depuis GitHub : bandeau « A new
+version of the studio is ready » affiché à chaque lancement, un worker en
+attente, et **trois caches dont deux périmés** (`ctf2-v11`, `ctf2-assets`,
+`ctf2-v14`).
+
+Cause : le service worker s'enregistrait aussi dans l'application. Or les
+fichiers y sont **embarqués dans le binaire** : le cache ne sert à rien, et il
+peut servir une interface périmée après une mise à jour de l'application. Un
+binaire neuf pouvait donc afficher l'ancienne interface, avec un bandeau qui ne
+menait nulle part.
+
+Le studio détecte maintenant qu'il est servi par le binaire (`/api/health`
+répond avec `app: "cuttheflow"`), n'enregistre **aucun** worker, et supprime au
+démarrage les workers et les caches `ctf2-*` d'une version précédente. Le cache
+d'une autre application du même domaine est préservé.
+
+Vérifié en application, profil WebView remis à zéro : 0 worker, 0 cache, bandeau
+masqué. Puis avec des caches périmés injectés (`ctf2-v11`, `ctf2-assets`,
+`autrepousse`) : après rechargement il ne reste que `autrepousse`, et le studio
+fonctionne. En hébergement statique, le worker continue de s'enregistrer
+normalement : 32/32 et 7/7 sur les tests de mise à jour.
+
+### 🐛 Corrigé — le fichier exporté par le moteur portait un nom illisible
+
+L'interface n'imposait pas de nom au lien de téléchargement : le navigateur
+prenait celui du serveur, `cuttheflow-j1a16fc15a251.mp4`. Le rendu navigateur,
+lui, donnait `Untitled.mp4`. Le nom du projet est désormais utilisé sur les deux
+chemins.
+
+### 🔧 Service worker `ctf2-v15`
+
+Purge du cache pour les visiteurs déjà passés sur la PWA.
+
+---
 
 ### 🐛 Corrigé — un clip à échelle animée n'était plus centré
 
