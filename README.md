@@ -313,10 +313,12 @@ written by the browser can be exported by the CLI and vice versa.
 
 ## Limits
 
-- keyframes, masks and speed are rendered by the **browser inside the window**
-  (WebCodecs) even when the engine is available: ffmpeg support for them is not
-  there yet, and the export dialog says so instead of silently producing a wrong
-  file
+- keyframes, masks and speed are rendered natively by the engine **and** by the
+  embedded view (WebCodecs) when ffmpeg is absent — both paths support all of
+  them. Animated opacity and masks cost more on the native side: measured on 4K
+  material, an opacity animation costs ×1.4 instead of ×6.8 compared with a plain
+  composite, because the alpha is generated small and scaled up; a mask costs
+  nothing per frame, it is rasterised once
 - the Linux *native window* build needs WebKitGTK 4.1 and GTK 3 at run time. The
   *self-contained* build exists exactly for machines that have neither — it
   depends on nothing and opens the studio in the browser

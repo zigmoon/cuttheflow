@@ -545,7 +545,9 @@ async function main() {
     const webm = JSON.parse(exportWebm);
     check('export WebM (VP9)', !webm.err && webm.size > 3000, webm.err || `${(webm.size / 1024).toFixed(0)} Ko`);
 
-    // ── Moteur natif : bascule annoncée vers le rendu navigateur ──────
+    // ── Moteur natif : le chemin natif est annoncé, sans repli ────────
+    // Le moteur rend désormais keyframes, masques et vitesse : la fenêtre
+    // d'export ne doit donc plus annoncer de bascule vers WebCodecs.
     const fallback = await cdp.eval(`
       (async () => {
         const ctf = window.ctf;
@@ -555,12 +557,21 @@ async function main() {
         const text = document.querySelector('#exportSummary').textContent;
         const blocked = document.querySelector('#startExportBtn').disabled;
         await new Promise(r => setTimeout(r, 600));
-        const notice = document.querySelector('#exportEncoderNotice').hidden;
+        const noticeHidden = document.querySelector('#exportEncoderNotice').hidden;
         ctf.mode = realMode;
-        return { warns: /WebCodecs|navigateur|browser/i.test(text) && text.length > 60, blocked, notice };
+        return {
+          annonceNavigateur: /WebCodecs|dans le navigateur|in browser/i.test(text),
+          parleNatif: /ffmpeg|moteur|engine/i.test(text),
+          blocked,
+          noticeHidden,
+        };
       })()
     `);
-    check('mode moteur : bascule navigateur annoncée', fallback.warns === true, `bouton bloqué=${fallback.blocked}`);
+    check(
+      'mode moteur : chemin natif annoncé, aucun repli WebCodecs',
+      fallback.annonceNavigateur === false && fallback.parleNatif === true && fallback.blocked === false,
+      `repli=${fallback.annonceNavigateur} natif=${fallback.parleNatif} bloqué=${fallback.blocked}`,
+    );
 
     // ── Ergonomie : dépôt sur une piste incompatible ──────────────────
     const dropCreate = await cdp.eval(`

@@ -327,19 +327,16 @@ export function hasKeyframes(clip: Clip, prop?: KeyframeProp): boolean {
 /**
  * Vrai si le projet doit être rendu par WebCodecs plutôt que par le moteur.
  *
- * Le moteur natif rend désormais la vitesse, les keyframes et les masques. Une
- * seule combinaison lui échappe : l'**échelle animée d'un texte ou d'une
- * forme**, dont la taille est figée à la construction du graphe (taille de
- * police, PNG rasterisé). Mieux vaut un export plus lent et annoncé qu'un
- * fichier silencieusement faux.
+ * Plus aucun cas obligatoire : le moteur natif rend la vitesse, les keyframes et
+ * les masques, y compris sur les textes et les formes (le texte est composé sur
+ * une couche transparente puis traité comme un clip ordinaire). La fonction est
+ * conservée comme point unique où déclarer une future limite, plutôt que de
+ * laisser un fichier faux partir en silence.
  */
-export function needsBrowserRender(project: Project): boolean {
-  for (const track of project.tracks) {
-    for (const clip of track.clips) {
-      const fixedSize = clip.type === 'text' || clip.type === 'shape';
-      if (fixedSize && hasKeyframes(clip, 'scale')) return true;
-    }
-  }
+export function needsBrowserRender(_project: Project): boolean {
+  // Aucune limite connue : le moteur natif rend la vitesse, les keyframes et les
+  // masques, y compris sur les textes et les formes. Le pendant Rust
+  // (`needs_browser_render`, dans `model.rs`) doit rester d'accord avec ceci.
   return false;
 }
 

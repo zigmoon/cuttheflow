@@ -378,8 +378,8 @@ const STRINGS: Record<string, Entry> = {
     fr: 'Mixé et encodé sur place (LAME), stéréo 48 kHz.',
   },
   'export.hintEngineFallback': {
-    en: 'This project animates the scale of a text or a shape: it is rendered by the WebCodecs engine, because the native engine fixes their size when it builds the graph.',
-    fr: 'Ce projet anime l’échelle d’un texte ou d’une forme : il est rendu par le moteur WebCodecs, le moteur natif fixant leur taille à la construction du graphe.',
+    en: 'Rendered by the WebCodecs engine instead of the native one.',
+    fr: 'Rendu par le moteur WebCodecs plutôt que par le moteur natif.',
   },
   'export.audioSkipped': {
     en: '⚠︎ {n} audio track(s) could not be decoded here: the video is exported without them. AAC decoding needs a build with proprietary codecs; ffmpeg handles it on every machine.',

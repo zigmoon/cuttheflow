@@ -7,7 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [CUT THE FLOW 2 — studio web 2.7.0 / moteur 0.10.0] - 2026-10-24
+## [CUT THE FLOW 2 — studio web 2.7.1 / moteur 0.10.1] - 2026-10-24
+
+### 🐛 Corrigé — un clip à échelle animée n'était plus centré
+
+La position d'un clip était calculée **en pixels fixes**, à partir de sa taille
+statique. Dès que l'échelle était animée, la taille réelle changeait à chaque
+image et le clip restait collé en haut à gauche : mesuré à `x=0` au lieu de
+`x=192` pour un clip centré de 256 px sur un cadre de 640.
+
+La position est désormais toujours une **expression** : `overlay` expose `W`/`H`
+(le cadre) et `w`/`h` (la taille courante du clip), donc le centrage reste juste
+quelle que soit l'échelle ou la rotation. Vérifié : centre à **319,5** sur les
+deux images extrêmes, bord gauche passant de 192 à 100.
+
+### 🐛 Corrigé — sur un clip texte, masque, opacité, rotation et fondus étaient ignorés
+
+Le texte était dessiné directement sur le cadre accumulé, par un `drawtext` qui
+ne connaît ni alpha, ni masque, ni rotation. Un titre avec un fondu d'entrée
+sortait donc **sans fondu**, sans le moindre message — alors que l'aperçu, lui,
+l'affichait. C'était le pire des cas : un export faux et silencieux.
+
+Le texte est maintenant composé sur une **couche transparente plein cadre**, puis
+traité par exactement le même code qu'un clip vidéo (`compose_clip`). Vérifié :
+opacité 235 → 150 → 31 avec le fondu, et masque ellipse à gauche du cadre →
+1457 pixels à gauche, **0 à droite**.
+
+Cette unification supprime la dernière différence entre les types de clips : il
+n'y a plus qu'**un seul** chemin de composition.
+
+### 🐛 Corrigé — les images et les formes ignoraient la vitesse
+
+Une image bouclée était limitée à la durée de la fenêtre, pas à la durée de
+source consommée : à 2×, l'entrée s'arrêtait à mi-parcours et la dernière image
+se figeait. La boucle couvre désormais la durée réellement lue.
+
+### ✅ Le repli sur WebCodecs n'est plus nécessaire
+
+`needs_browser_render()` renvoie `None` côté Rust et `false` côté interface : le
+moteur natif rend désormais toutes les fonctions du studio, y compris sur les
+textes et les formes. La fonction est conservée comme point unique où déclarer
+une future limite, plutôt que de laisser un fichier faux partir en silence.
+
+Le test d'interface correspondant a été retourné : il vérifie maintenant que la
+fenêtre d'export annonce le **chemin natif** et ne propose plus de bascule.
+
+### 🔧 Service worker `ctf2-v14`
+
+Purge du cache pour les visiteurs déjà passés sur la PWA.
+
+---
 
 ### ✨ Le moteur natif rend désormais vitesse, keyframes et masques
 
