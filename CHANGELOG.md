@@ -2099,3 +2099,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 *For more detailed technical information about the GPU acceleration feature, see [GPU-IMPLEMENTATION-SUMMARY.md](GPU-IMPLEMENTATION-SUMMARY.md)*
+
+<!-- Note de tenue : une modification de ce fichier seul ne relance plus la construction des binaires. -->
