@@ -114,6 +114,7 @@ The studio runs two ways, and picks the right one by itself:
 | Import, edit, preview | embedded view (IndexedDB) | engine |
 | Export MP4 / WebM / MP3 | WebCodecs (LAME for MP3) | ffmpeg |
 | Reproducible output | no (hardware encoder) | **yes** (same ffmpeg build → byte-identical) |
+| Keyframes, masks, speed | yes | **yes** (native, no fallback) |
 | Quality control | bitrate only | **CRF + preset** |
 | Long edits | bounded by the tab | frame-exact |
 | Export in the background | throttled by the tab | unaffected |
@@ -144,6 +145,7 @@ model.
 | | Browser engine | This engine |
 |---|---|---|
 | Encoder | WebCodecs / GPU | ffmpeg, fixed settings |
+| Keyframes, masks, speed | yes | **yes** |
 | Quality | bitrate target | CRF + preset |
 | Long edits | realtime fallback, drifts | frame-exact |
 | Background tab | export stalls | unaffected |

@@ -7,7 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [CUT THE FLOW 2 — studio web 2.6.3 / moteur 0.9.2] - 2026-10-24
+## [CUT THE FLOW 2 — studio web 2.7.0 / moteur 0.10.0] - 2026-10-24
+
+### ✨ Le moteur natif rend désormais vitesse, keyframes et masques
+
+Jusqu'ici ces trois fonctions forçaient un repli sur WebCodecs, même dans
+l'application : le moteur refusait le projet plutôt que de produire un fichier
+faux. Il les rend maintenant lui-même, avec la même courbe que l'aperçu.
+
+| Fonction | Technique | Vérifié |
+|---|---|---|
+| Vitesse 0,25× → 4× | `setpts` (vidéo) + `atempo` chaîné (audio) | 2× → 60 images / 2,000 s · 0,5× → 2,000 s, audio aligné |
+| Keyframes d'opacité | alpha uniforme généré en 8×8 puis agrandi | 255 → 152 → 57 sur une source blanche |
+| Keyframes d'échelle | `scale` avec `eval=frame` | 256×144 → 441 px (valeur exacte à l'image 29) |
+| Keyframes de position | expressions `overlay` en `W`/`w` | x = 32 → 187 (valeur exacte) |
+| Keyframes de rotation | `rotate` avec expression, boîte fixe | boîte 322×182 → 354×288 |
+| Keyframes de volume | `volume` avec `eval=frame` | −25,1 dB → −38,4 dB |
+| Masques rect / ellipse | masque rasterisé **une fois**, puis bouclé | centre 255, coins 0 |
+
+Pourquoi une image alpha en 8×8 : l'opacité est uniforme dans l'image, inutile
+d'évaluer une expression sur 8 millions de pixels. Mesuré sur du 4K, 30 images :
+**1,11 s** contre **5,46 s** avec un `geq` plein cadre — soit ×1,4 au lieu de ×6,8
+par rapport à un rendu sans alpha.
+
+Les masques suivent la même logique que les formes : un `geq` **une seule fois**
+pour dessiner le masque en PNG, puis l'image est bouclée. Aucun coût par image.
+
+### 🔒 Un seul cas reste au navigateur
+
+L'**échelle animée d'un texte ou d'une forme** : leur taille est figée à la
+construction du graphe (taille de police, PNG rasterisé). Le refus est explicite
+et affiché dans la fenêtre d'export, jamais silencieux.
+
+### 🐛 Trois bugs trouvés par les tests du graphe
+
+- un libellé ffmpeg (`[c1]`) pouvait être produit **deux fois** sur un clip masqué ;
+- une chaîne réduite à `[am1][c1]` (deux entrées, aucun filtre) était refusée par
+  ffmpeg : un `null` garantit toujours un filtre ;
+- `geq` attend `T` (majuscule) pour le temps, là où `scale`, `rotate` et `overlay`
+  attendent `t`. La confusion faisait échouer tout export à opacité animée.
+
+Ajout de 9 tests du graphe (structure du filtre, chaînage `atempo`, interpolation
+identique au rendu navigateur) : **41 tests côté noyau**.
+
+### 🔧 Service worker `ctf2-v13`
+
+Purge du cache pour les visiteurs déjà passés sur la PWA.
+
+---
 
 ### ✨ Ajouté — icône et métadonnées dans le `.exe` Windows
 
@@ -2099,5 +2146,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 *For more detailed technical information about the GPU acceleration feature, see [GPU-IMPLEMENTATION-SUMMARY.md](GPU-IMPLEMENTATION-SUMMARY.md)*
-
-<!-- Note de tenue : une modification de ce fichier seul ne relance plus la construction des binaires. -->

@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ctf_core::graph::{
     build_audio_graph, build_video_graph, shape_alpha_expression, FONT_FILE_NAME, InputKind,
-    ShapeAsset,
+    MaskAsset, ShapeAsset,
 };
 use ctf_core::model::{ExportFormat, Project};
 use ctf_core::time::{secs, Micros};
@@ -295,6 +295,10 @@ fn run_export(
     for asset in &video.shape_assets {
         rasterize_shape(ffmpeg, asset, work_dir)?;
     }
+    // Les masques suivent la même logique : dessinés une fois, bouclés ensuite.
+    for asset in &video.mask_assets {
+        rasterize_mask(ffmpeg, asset, work_dir)?;
+    }
 
     on_progress(report(13.0, "video", ""));
     let mut args = base_args();
@@ -533,6 +537,37 @@ fn rasterize_shape(ffmpeg: &Ffmpeg, asset: &ShapeAsset, work_dir: &Path) -> Resu
     ]);
     run_ffmpeg(&ffmpeg.ffmpeg, &args, Some(work_dir), 0, |_| {}, None)
         .map_err(|e| format!("dessin de la forme « {} » : {e}", asset.file_name))
+}
+
+/// Dessine un masque en niveaux de gris (0 = masqué, 255 = visible).
+///
+/// Le rendu navigateur adoucit le bord par un `blur()` ; ici le même rayon
+/// devient un `gblur`, appliqué une seule fois sur l'image fixe.
+fn rasterize_mask(ffmpeg: &Ffmpeg, asset: &MaskAsset, work_dir: &Path) -> Result<(), String> {
+    let mut filter = format!(
+        "format=gray,geq=lum='{}'",
+        asset.expression
+    );
+    if asset.feather_px > 0.5 {
+        // `gblur` attend un sigma, pas un rayon : sigma ≈ rayon / 2.
+        filter.push_str(&format!(",gblur=sigma={:.3}", asset.feather_px / 2.0));
+    }
+    let mut args = base_args();
+    args.extend([
+        "-f".into(),
+        "lavfi".into(),
+        "-i".into(),
+        format!("nullsrc=s={}x{}", asset.width_px, asset.height_px),
+        "-vf".into(),
+        filter,
+        "-frames:v".into(),
+        "1".into(),
+        "-pix_fmt".into(),
+        "gray".into(),
+        work_dir.join(&asset.file_name).to_string_lossy().to_string(),
+    ]);
+    run_ffmpeg(&ffmpeg.ffmpeg, &args, Some(work_dir), 0, |_| {}, None)
+        .map_err(|e| format!("dessin du masque « {} » : {e}", asset.file_name))
 }
 
 fn rgb_components(hex: &str) -> (String, String, String) {

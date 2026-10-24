@@ -318,17 +318,26 @@ export function sourceSpan(clip: Clip): number {
   return clip.duration_us * clipSpeed(clip);
 }
 
-export function hasKeyframes(clip: Clip): boolean {
-  return (clip.keyframes?.length ?? 0) > 0;
+export function hasKeyframes(clip: Clip, prop?: KeyframeProp): boolean {
+  const keys = clip.keyframes ?? [];
+  if (!prop) return keys.length > 0;
+  return keys.some((key) => key.prop === prop);
 }
 
-/** Vrai si le projet utilise une fonction que le moteur Rust ne sait pas rendre. */
+/**
+ * Vrai si le projet doit être rendu par WebCodecs plutôt que par le moteur.
+ *
+ * Le moteur natif rend désormais la vitesse, les keyframes et les masques. Une
+ * seule combinaison lui échappe : l'**échelle animée d'un texte ou d'une
+ * forme**, dont la taille est figée à la construction du graphe (taille de
+ * police, PNG rasterisé). Mieux vaut un export plus lent et annoncé qu'un
+ * fichier silencieusement faux.
+ */
 export function needsBrowserRender(project: Project): boolean {
   for (const track of project.tracks) {
     for (const clip of track.clips) {
-      if (hasKeyframes(clip)) return true;
-      if (clip.mask) return true;
-      if (clipSpeed(clip) !== 1) return true;
+      const fixedSize = clip.type === 'text' || clip.type === 'shape';
+      if (fixedSize && hasKeyframes(clip, 'scale')) return true;
     }
   }
   return false;

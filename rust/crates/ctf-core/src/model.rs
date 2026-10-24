@@ -314,15 +314,21 @@ impl Clip {
     }
 
     /// Vrai si le clip utilise une fonction que ffmpeg ne rend pas encore.
+    ///
+    /// Le moteur natif rend désormais la vitesse, les keyframes et les masques.
+    /// Un seul cas reste hors de portée : l'**échelle animée d'un texte ou d'une
+    /// forme**, dont la taille est fixée à la construction du graphe (taille de
+    /// police, PNG rasterisé). Plutôt que de produire un fichier faux en
+    /// silence, on renvoie le projet au rendu navigateur.
     pub fn needs_browser_render(&self) -> Option<&'static str> {
-        if (self.speed - 1.0).abs() > 1e-6 {
-            return Some("vitesse");
-        }
-        if !self.keyframes.is_empty() {
-            return Some("keyframes");
-        }
-        if self.mask.is_some() {
-            return Some("masque");
+        let is_text_or_shape = matches!(self.kind, ClipKind::Text | ClipKind::Shape);
+        if is_text_or_shape && !self.keyframes.is_empty() {
+            let animated_scale = self.keyframes.iter().any(|key| {
+                key.get("prop").and_then(|p| p.as_str()) == Some("scale")
+            });
+            if animated_scale {
+                return Some("échelle animée sur un texte ou une forme");
+            }
         }
         None
     }
@@ -689,14 +695,29 @@ mod tests {
     fn detecte_les_fonctions_non_rendues() {
         let mut c = clip("c1", ClipKind::Video, Some("m1"));
         assert_eq!(c.needs_browser_render(), None);
+        // Vitesse, keyframes et masques sont maintenant rendus par le moteur.
         c.speed = 2.0;
-        assert_eq!(c.needs_browser_render(), Some("vitesse"));
+        assert_eq!(c.needs_browser_render(), None);
         c.speed = 1.0;
         c.keyframes = vec![serde_json::json!({ "prop": "opacity", "time_us": 0, "value": 1.0 })];
-        assert_eq!(c.needs_browser_render(), Some("keyframes"));
+        assert_eq!(c.needs_browser_render(), None);
         c.keyframes.clear();
         c.mask = Some(serde_json::json!({ "kind": "rect" }));
-        assert_eq!(c.needs_browser_render(), Some("masque"));
+        assert_eq!(c.needs_browser_render(), None);
+
+        // Seule exception : une échelle animée sur un texte, dont la taille est
+        // figée à la construction du graphe.
+        let mut text = clip("t1", ClipKind::Text, None);
+        text.keyframes =
+            vec![serde_json::json!({ "prop": "scale", "time_us": 0, "value": 2.0 })];
+        assert_eq!(
+            text.needs_browser_render(),
+            Some("échelle animée sur un texte ou une forme")
+        );
+        // Une opacité animée sur un texte reste, elle, rendue par le moteur.
+        text.keyframes =
+            vec![serde_json::json!({ "prop": "opacity", "time_us": 0, "value": 0.5 })];
+        assert_eq!(text.needs_browser_render(), None);
     }
 
     #[test]

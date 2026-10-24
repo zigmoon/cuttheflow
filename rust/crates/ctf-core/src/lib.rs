@@ -16,6 +16,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod animation;
 pub mod graph;
 pub mod model;
 pub mod plan;

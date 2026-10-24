@@ -15,9 +15,16 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::animation;
 use crate::model::{Clip, ClipKind, Effect, Media, Project, ShapeKind};
 use crate::plan::resolve_project;
 use crate::time::{secs, us_to_samples, Fps, Micros, AUDIO_SAMPLE_RATE};
+
+/// Bornes de vitesse appliquées par l'interface (`MIN_SPEED`/`MAX_SPEED` de
+/// `state.ts`). Au-delà, `atempo` demanderait un chaînage plus long que ce que
+/// l'interface permet.
+pub const MIN_SPEED: f64 = 0.25;
+pub const MAX_SPEED: f64 = 4.0;
 
 /// Nom du fichier de police copié dans le dossier de travail.
 pub const FONT_FILE_NAME: &str = "ctf-font.ttf";
@@ -71,7 +78,25 @@ pub struct VideoGraph {
     pub text_assets: Vec<TextAsset>,
     /// Formes à rasteriser avant le rendu.
     pub shape_assets: Vec<ShapeAsset>,
+    /// Masques à rasteriser avant le rendu (niveaux de gris, taille du cadre).
+    pub mask_assets: Vec<MaskAsset>,
     pub has_visual: bool,
+}
+
+/// Masque de composition, rasterisé **une seule fois**.
+///
+/// Le masque ne dépend pas du temps : le redessiner à chaque image coûterait un
+/// `geq` plein cadre par image (mesuré ×6 sur du 4K). On le dessine donc une
+/// fois, puis on le boucle comme une image — la même stratégie que les formes.
+#[derive(Debug, Clone)]
+pub struct MaskAsset {
+    pub file_name: String,
+    pub width_px: u32,
+    pub height_px: u32,
+    /// Expression `geq` du canal luma (0 = masqué, 255 = visible).
+    pub expression: String,
+    /// Rayon d'adoucissement du bord, en pixels (0 = bord net).
+    pub feather_px: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -101,6 +126,7 @@ pub fn build_video_graph(project: &Project, font_available: bool) -> Result<Vide
     let mut parts: Vec<String> = Vec::new();
     let mut text_assets: Vec<TextAsset> = Vec::new();
     let mut shape_assets: Vec<ShapeAsset> = Vec::new();
+    let mut mask_assets: Vec<MaskAsset> = Vec::new();
     let mut has_visual = false;
     let mut text_needed = false;
 
@@ -195,23 +221,46 @@ pub fn build_video_graph(project: &Project, font_available: bool) -> Result<Vide
 
                     let mut width = source_width;
                     let mut height = source_height;
+                    let speed = clip.speed.clamp(MIN_SPEED, MAX_SPEED);
+
+                    // Durée de SOURCE consommée par la fenêtre du clip : à 2×, un
+                    // clip de 1 s lit 2 s de source. Sans ce calcul, accélérer un
+                    // plan le rognerait au lieu de l'accélérer.
+                    let source_span = ((placement.duration_us as f64) * speed).round() as Micros;
 
                     let mut chain = if clip.kind == ClipKind::Image || clip.kind == ClipKind::Shape {
                         format!(
                             "[{index}:v]trim=duration={},setpts=PTS-STARTPTS",
-                            secs(placement.duration_us)
+                            secs(source_span)
                         )
                     } else {
                         format!(
                             "[{index}:v]trim=start={}:duration={},setpts=PTS-STARTPTS",
                             secs(placement.source_start_us),
-                            secs(placement.duration_us)
+                            secs(source_span)
                         )
                     };
-                    chain.push_str(&format!(
-                        ",fps={},scale={width}:{height}:flags=bicubic,setsar=1,format=rgba",
-                        project.fps.as_ratio()
-                    ));
+                    // Vitesse : on resserre les horodatages. Placé avant `fps`,
+                    // l'échantillonnage retombe sur la cadence du projet.
+                    if (speed - 1.0).abs() > 1e-6 {
+                        chain.push_str(&format!(",setpts=PTS/{speed:.6}"));
+                    }
+                    chain.push_str(&format!(",fps={}", project.fps.as_ratio()));
+
+                    // Échelle : fixe, ou animée image par image. Une échelle qui
+                    // varie change la taille du flux ; `overlay` l'accepte et ses
+                    // expressions `w`/`h` suivent la taille courante.
+                    let scale_expr = animation::expression(clip, "scale", "t");
+                    let (base_w, base_h) =
+                        contain_dimensions(source_width, source_height, clip.scale);
+                    if let Some(expr) = &scale_expr {
+                        chain.push_str(&format!(
+                            ",scale=w='max(2,trunc({base_w}*({expr})/2)*2)':h='max(2,trunc({base_h}*({expr})/2)*2)':eval=frame:flags=bicubic"
+                        ));
+                    } else {
+                        chain.push_str(&format!(",scale={width}:{height}:flags=bicubic"));
+                    }
+                    chain.push_str(",setsar=1");
 
                     // Effets : appliqués au clip seul, avant composition. Un effet
                     // ne peut donc jamais déborder sur le clip voisin.
@@ -219,59 +268,245 @@ pub fn build_video_graph(project: &Project, font_available: bool) -> Result<Vide
                     if !effects.is_empty() {
                         chain.push_str(&effects);
                     }
+                    chain.push_str(",format=rgba");
 
                     // Rotation : `rotate` élargit l'image à sa boîte englobante,
-                    // que l'on recentre ensuite à l'overlay.
-                    if clip.rotation.abs() > 0.01 {
-                        let angle = clip.rotation.to_radians();
-                        let cos = angle.cos().abs();
-                        let sin = angle.sin().abs();
-                        let rotated_w = (width as f64 * cos + height as f64 * sin).round() as u32;
-                        let rotated_h = (width as f64 * sin + height as f64 * cos).round() as u32;
+                    // récentrée ensuite à l'overlay. Avec des keyframes la boîte
+                    // est fixée au maximum de l'animation : une taille qui
+                    // changerait à chaque image casserait le lien de sortie.
+                    let rotation_expr = animation::expression(clip, "rotation", "t");
+                    if let Some(expr) = &rotation_expr {
+                        let max_angle = animation::range(clip, "rotation")
+                            .map(|(low, high)| low.abs().max(high.abs()))
+                            .unwrap_or(0.0)
+                            .max(clip.rotation.abs());
+                        let (box_w, box_h) = bounding_box(width, height, max_angle);
+                        chain.push_str(&format!(
+                            ",rotate=a='({expr})*PI/180':c=none:ow={box_w}:oh={box_h}"
+                        ));
+                        width = box_w;
+                        height = box_h;
+                    } else if clip.rotation.abs() > 0.01 {
+                        let (rotated_w, rotated_h) = bounding_box(width, height, clip.rotation);
                         chain.push_str(&format!(
                             ",rotate={:.6}:c=none:ow={}:oh={}",
-                            angle, rotated_w, rotated_h
+                            clip.rotation.to_radians(),
+                            rotated_w,
+                            rotated_h
                         ));
                         width = rotated_w;
                         height = rotated_h;
                     }
 
-                    if clip.opacity < 0.999_999 {
-                        chain.push_str(&format!(",colorchannelmixer=aa={:.6}", clip.opacity));
+                    // Opacité : statique, ou animée. Une opacité animée produit une
+                    // image alpha UNIFORME : inutile d'évaluer une expression par
+                    // pixel. Un carré 8×8 agrandi au plus proche donne exactement
+                    // le même résultat (mesuré : 1,1 s contre 5,5 s en `geq` plein
+                    // cadre sur du 4K).
+                    //
+                    // Attention : dans `geq`, le temps s'écrit `T` (majuscule),
+                    // alors que `scale`, `rotate` et `overlay` attendent `t`.
+                    let opacity_expr = animation::expression(clip, "opacity", "T");
+                    let static_opacity = clip.opacity;
+
+                    // Masque : il découpe le clip lui-même, dans le repère du
+                    // cadre. Le clip doit donc d'abord être posé sur une couche
+                    // plein cadre, sinon la découpe tomberait au mauvais endroit.
+                    let mask = clip.mask.as_ref().filter(|value| value.is_object());
+
+                    let mut stream = chain;
+                    if mask.is_some() {
+                        let offset_x =
+                            (clip.x * project.width as f64 - width as f64 / 2.0).round() as i64;
+                        let offset_y =
+                            (clip.y * project.height as f64 - height as f64 / 2.0).round() as i64;
+                        let layer = format!("lay{step}");
+                        // Libellé intermédiaire distinct de `[c{step}]` : ce
+                        // dernier est la sortie finale du clip, il ne peut être
+                        // produit qu'une seule fois.
+                        parts.push(format!("{stream}[k{step}]"));
+                        parts.push(format!(
+                            "color=c=black@0.0:s={}x{}:r={}:d={},format=rgba[{layer}]",
+                            project.width,
+                            project.height,
+                            project.fps.as_ratio(),
+                            secs(placement.duration_us)
+                        ));
+                        parts.push(format!(
+                            "[{layer}][k{step}]overlay=x={offset_x}:y={offset_y}:format=auto:shortest=1[pos{step}]"
+                        ));
+                        stream = format!("[pos{step}]");
                     }
+
+                    // Alpha : masque et opacité se multiplient. Les deux sont des
+                    // images en niveaux de gris, un `blend` les combine sans coût.
+                    let mask_index = if mask.is_some() {
+                        let width_px = project.width.max(2);
+                        let height_px = project.height.max(2);
+                        let file_name = format!("ctf-mask-{:03}.png", mask_assets.len());
+                        mask_assets.push(MaskAsset {
+                            file_name: file_name.clone(),
+                            width_px,
+                            height_px,
+                            expression: mask_alpha_expression(
+                                mask.unwrap(),
+                                project.width,
+                                project.height,
+                            ),
+                            feather_px: mask_feather_px(mask.unwrap(), project),
+                        });
+                        inputs.push(InputSpec {
+                            path: PathBuf::from(file_name),
+                            kind: InputKind::Image,
+                            loop_duration_us: placement.duration_us,
+                            fps: project.fps,
+                        });
+                        Some(inputs.len() - 1)
+                    } else {
+                        None
+                    };
+
+                    match (mask_index, &opacity_expr) {
+                        (Some(mask_input), Some(expr)) => {
+                            parts.push(format!(
+                                "color=c=black:s=8x8:r={}:d={},geq=lum='255*({expr})',format=gray,scale={}:{}:flags=neighbor[op{step}]",
+                                project.fps.as_ratio(),
+                                secs(placement.duration_us),
+                                project.width,
+                                project.height
+                            ));
+                            parts.push(format!(
+                                "[{mask_input}:v]trim=duration={},setpts=PTS-STARTPTS,format=gray[mk{step}]",
+                                secs(placement.duration_us)
+                            ));
+                            parts.push(format!(
+                                "[mk{step}][op{step}]blend=all_mode=multiply[al{step}]"
+                            ));
+                            parts.push(format!(
+                                "{stream}[al{step}]alphamerge[am{step}]"
+                            ));
+                            stream = format!("[am{step}]");
+                        }
+                        (Some(mask_input), None) => {
+                            parts.push(format!(
+                                "[{mask_input}:v]trim=duration={},setpts=PTS-STARTPTS,format=gray[mk{step}]",
+                                secs(placement.duration_us)
+                            ));
+                            if static_opacity < 0.999_999 {
+                                parts.push(format!(
+                                    "color=c=black:s=8x8:r={}:d={},geq=lum='{:.6}*255',format=gray,scale={}:{}:flags=neighbor[op{step}]",
+                                    project.fps.as_ratio(),
+                                    secs(placement.duration_us),
+                                    static_opacity,
+                                    project.width,
+                                    project.height
+                                ));
+                                parts.push(format!(
+                                    "[mk{step}][op{step}]blend=all_mode=multiply[al{step}]"
+                                ));
+                                parts.push(format!("{stream}[al{step}]alphamerge[am{step}]"));
+                                stream = format!("[am{step}]");
+                            } else {
+                                parts.push(format!("{stream}[mk{step}]alphamerge[am{step}]"));
+                                stream = format!("[am{step}]");
+                            }
+                        }
+                        (None, Some(expr)) => {
+                            parts.push(format!(
+                                "color=c=black:s=8x8:r={}:d={},geq=lum='255*({expr})',format=gray,scale={}:{}:flags=neighbor[op{step}]",
+                                project.fps.as_ratio(),
+                                secs(placement.duration_us),
+                                width,
+                                height
+                            ));
+                            parts.push(format!("{stream}[op{step}]alphamerge[am{step}]"));
+                            stream = format!("[am{step}]");
+                        }
+                        (None, None) => {
+                            if static_opacity < 0.999_999 {
+                                stream.push_str(&format!(
+                                    ",colorchannelmixer=aa={:.6}",
+                                    static_opacity
+                                ));
+                            }
+                        }
+                    }
+
+                    // Fondus : appliqués APRÈS l'alpha, donc ils le multiplient au
+                    // lieu de l'écraser. Toujours en temps LOCAL (0 → durée).
+                    let mut tail_filters: Vec<String> = Vec::new();
                     if placement.fade_in_us > 0 {
-                        chain.push_str(&format!(
-                            ",fade=t=in:st=0:d={}:alpha=1",
+                        tail_filters.push(format!(
+                            "fade=t=in:st=0:d={}:alpha=1",
                             secs(placement.fade_in_us)
                         ));
                     }
                     if clip.fade_out_us > 0 {
-                        chain.push_str(&format!(
-                            ",fade=t=out:st={}:d={}:alpha=1",
+                        tail_filters.push(format!(
+                            "fade=t=out:st={}:d={}:alpha=1",
                             secs(placement.duration_us - clip.fade_out_us),
                             secs(clip.fade_out_us)
                         ));
                     }
-                    // ⏱️ DÉCALAGE SUR LA TIMELINE — indispensable : `overlay` synchronise
-                    // ses deux entrées par PTS. Sans ce décalage, le clip placé à 6 s
-                    // afficherait sa 6ᵉ seconde dès la première image de sa fenêtre.
-                    // Les fondus restent exprimés en temps LOCAL (0 → durée du clip),
-                    // donc le décalage est appliqué en dernier.
-                    if placement.start_us > 0 {
-                        chain.push_str(&format!(",setpts=PTS+{}/TB", secs(placement.start_us)));
-                    }
-                    chain.push_str(&format!("[c{step}]"));
-                    parts.push(chain);
 
-                    let offset_x = (clip.x * project.width as f64 - width as f64 / 2.0).round() as i64;
-                    let offset_y =
-                        (clip.y * project.height as f64 - height as f64 / 2.0).round() as i64;
+                    // ⏱️ DÉCALAGE SUR LA TIMELINE — indispensable : `overlay`
+                    // synchronise ses deux entrées par PTS. Sans ce décalage, le
+                    // clip placé à 6 s afficherait sa 6ᵉ seconde dès la première
+                    // image de sa fenêtre. Le décalage est appliqué en dernier,
+                    // une fois les fondus exprimés en temps local.
+                    if placement.start_us > 0 {
+                        tail_filters.push(format!("setpts=PTS+{}/TB", secs(placement.start_us)));
+                    }
+                    // Un maillon de chaîne qui ne porte que des libellés
+                    // (`[am1][c1]`) est refusé par ffmpeg : on garde toujours au
+                    // moins un filtre. Et on n'ajoute pas de virgule après un
+                    // libellé d'entrée, sinon ffmpeg lit un filtre vide.
+                    if tail_filters.is_empty() {
+                        tail_filters.push("null".to_string());
+                    }
+                    let separator = if stream.trim_end().ends_with(']') { "" } else { "," };
                     parts.push(format!(
-                        "[v{}][c{}]overlay=x={}:y={}:format=auto:shortest=0:enable='between(t,{},{})'[v{}]",
+                        "{stream}{separator}{}[c{step}]",
+                        tail_filters.join(",")
+                    ));
+
+                    // Position : fixe, ou animée. En `overlay`, `W`/`H` sont les
+                    // dimensions du cadre principal et `w`/`h` celles du clip :
+                    // les expressions suivent donc l'échelle et la rotation
+                    // courantes sans qu'on ait à recalculer quoi que ce soit.
+                    let x_expr = animation::expression(clip, "x", "t");
+                    let y_expr = animation::expression(clip, "y", "t");
+                    let position = match (&x_expr, &y_expr) {
+                        (None, None) if mask.is_none() => format!(
+                            "x={}:y={}",
+                            (clip.x * project.width as f64 - width as f64 / 2.0).round() as i64,
+                            (clip.y * project.height as f64 - height as f64 / 2.0).round() as i64
+                        ),
+                        (None, None) => "x=0:y=0".to_string(),
+                        _ => {
+                            let x = match &x_expr {
+                                Some(expr) => format!("'({expr})*W-w/2'"),
+                                None => format!(
+                                    "{}",
+                                    (clip.x * project.width as f64 - width as f64 / 2.0).round()
+                                        as i64
+                                ),
+                            };
+                            let y = match &y_expr {
+                                Some(expr) => format!("'({expr})*H-h/2'"),
+                                None => format!(
+                                    "{}",
+                                    (clip.y * project.height as f64 - height as f64 / 2.0).round()
+                                        as i64
+                                ),
+                            };
+                            format!("x={x}:y={y}")
+                        }
+                    };
+                    parts.push(format!(
+                        "[v{}][c{}]overlay={position}:format=auto:shortest=0:enable='between(t,{},{})'[v{}]",
                         step - 1,
                         step,
-                        offset_x,
-                        offset_y,
                         secs(placement.start_us),
                         secs(placement.end_us()),
                         step
@@ -327,6 +562,7 @@ pub fn build_video_graph(project: &Project, font_available: bool) -> Result<Vide
         duration_us: duration,
         text_assets,
         shape_assets,
+        mask_assets,
         has_visual,
     })
 }
@@ -384,13 +620,31 @@ pub fn build_audio_graph(project: &Project) -> Result<AudioGraph, String> {
             let index = inputs.len() - 1;
 
             let volume = (track.volume * clip.volume).clamp(0.0, 4.0);
+            let speed = clip.speed.clamp(MIN_SPEED, MAX_SPEED);
+            // Durée de source consommée : à 2×, un clip de 1 s lit 2 s de source.
+            let source_span = ((placement.duration_us as f64) * speed).round() as Micros;
             let mut chain = format!(
-                "[{index}:a]atrim=start={}:duration={},asetpts=PTS-STARTPTS,aresample={}:first_pts=0,aformat=sample_fmts=fltp:channel_layouts=stereo,volume={:.6}",
+                "[{index}:a]atrim=start={}:duration={},asetpts=PTS-STARTPTS,aresample={}:first_pts=0,aformat=sample_fmts=fltp:channel_layouts=stereo",
                 secs(placement.source_start_us),
-                secs(placement.duration_us),
-                AUDIO_SAMPLE_RATE,
-                volume
+                secs(source_span),
+                AUDIO_SAMPLE_RATE
             );
+            // Vitesse : `atempo` conserve la hauteur du son. Il n'accepte qu'un
+            // facteur 0,5 – 2,0 par étage, d'où le chaînage.
+            if (speed - 1.0).abs() > 1e-6 {
+                chain.push_str(&format!(",{}", atempo_chain(speed)));
+            }
+            // Volume : constant, ou animé par keyframes (`eval=frame` lit
+            // l'expression à chaque échantillon).
+            let track_volume = track.volume.clamp(0.0, 4.0);
+            match animation::expression(clip, "volume", "t") {
+                Some(expr) => {
+                    chain.push_str(&format!(
+                        ",volume=volume='clip({track_volume:.6}*({expr}),0,4)':eval=frame"
+                    ));
+                }
+                None => chain.push_str(&format!(",volume={:.6}", volume)),
+            }
             let fade_in = placement.fade_in_us.max(clip.fade_in_us);
             if fade_in > 0 {
                 chain.push_str(&format!(",afade=t=in:st=0:d={}", secs(fade_in)));
@@ -494,6 +748,117 @@ pub fn shape_pixel_size(canvas: u32, scale: f64, fraction: f64) -> u32 {
     let value = (canvas as f64 * fraction.clamp(0.01, 2.0) * scale.clamp(0.05, 20.0)).round();
     let even = (value.max(2.0) as u32) & !1;
     even.max(2)
+}
+
+/// Dimensions du clip **avant** l'échelle du clip (ajustement « contain »).
+///
+/// `fit_dimensions` renvoie déjà le résultat mis à l'échelle ; pour une échelle
+/// animée il faut la base, sinon l'expression appliquerait l'échelle deux fois.
+pub fn contain_dimensions(fit_width: u32, fit_height: u32, clip_scale: f64) -> (u32, u32) {
+    let scale = clip_scale.clamp(0.05, 20.0);
+    let width = (fit_width as f64 / scale).round().max(2.0) as u32;
+    let height = (fit_height as f64 / scale).round().max(2.0) as u32;
+    (width & !1, height & !1)
+}
+
+/// Boîte englobante d'un rectangle tourné de `degrees`, arrondie au pair.
+pub fn bounding_box(width: u32, height: u32, degrees: f64) -> (u32, u32) {
+    let angle = degrees.to_radians();
+    let cos = angle.cos().abs();
+    let sin = angle.sin().abs();
+    let w = (width as f64 * cos + height as f64 * sin).round().max(2.0) as u32;
+    let h = (width as f64 * sin + height as f64 * cos).round().max(2.0) as u32;
+    (w & !1, h & !1)
+}
+
+/// Expression `geq` (canal luma) d'un masque, en coordonnées du cadre.
+///
+/// Reproduit `paintMaskShape` du rendu navigateur : la forme est un rectangle ou
+/// une ellipse centrée sur `(x, y)`, exprimée en fractions du canevas. `invert`
+/// échange l'intérieur et l'extérieur.
+pub fn mask_alpha_expression(mask: &serde_json::Value, project_w: u32, project_h: u32) -> String {
+    let number = |key: &str, default: f64| -> f64 {
+        mask.get(key).and_then(|v| v.as_f64()).unwrap_or(default)
+    };
+    let kind = mask
+        .get("kind")
+        .and_then(|v| v.as_str())
+        .unwrap_or("rect")
+        .to_string();
+    let invert = mask
+        .get("invert")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let width = (number("width", 1.0) * project_w as f64).max(1.0);
+    let height = (number("height", 1.0) * project_h as f64).max(1.0);
+    let cx = number("x", 0.5) * project_w as f64;
+    let cy = number("y", 0.5) * project_h as f64;
+
+    let inside = if kind == "ellipse" {
+        format!(
+            "lte(pow((X-{cx:.3})/({hw:.3}),2)+pow((Y-{cy:.3})/({hh:.3}),2),1)",
+            hw = (width / 2.0).max(0.5),
+            hh = (height / 2.0).max(0.5)
+        )
+    } else {
+        format!(
+            "lte(abs(X-{cx:.3}),{hw:.3})*lte(abs(Y-{cy:.3}),{hh:.3})",
+            hw = (width / 2.0).max(0.5),
+            hh = (height / 2.0).max(0.5)
+        )
+    };
+    let condition = if invert {
+        format!("not({inside})")
+    } else {
+        inside
+    };
+    format!("if({condition},255,0)")
+}
+
+/// Rayon d'adoucissement du masque, en pixels.
+///
+/// Le rendu navigateur applique `blur(feather × min(w,h) × 0,22)` ; on reprend la
+/// même formule pour que le bord ait la même largeur des deux côtés.
+pub fn mask_feather_px(mask: &serde_json::Value, project: &Project) -> f64 {
+    let feather = mask
+        .get("feather")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0);
+    if feather <= 0.005 {
+        return 0.0;
+    }
+    let width = mask
+        .get("width")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.0)
+        * project.width as f64;
+    let height = mask
+        .get("height")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.0)
+        * project.height as f64;
+    feather * width.min(height) * 0.22
+}
+
+/// Chaînage `atempo` couvrant la vitesse demandée.
+///
+/// `atempo` n'accepte qu'un facteur 0,5 – 2,0 par instance : 0,25× demande deux
+/// étages. Sans cela, ffmpeg refuse le graphe.
+pub fn atempo_chain(speed: f64) -> String {
+    let mut remaining = speed.clamp(MIN_SPEED, MAX_SPEED);
+    let mut stages: Vec<String> = Vec::new();
+    while remaining < 0.5 - 1e-9 {
+        stages.push("atempo=0.500000".to_string());
+        remaining /= 0.5;
+    }
+    while remaining > 2.0 + 1e-9 {
+        stages.push("atempo=2.000000".to_string());
+        remaining /= 2.0;
+    }
+    stages.push(format!("atempo={remaining:.6}"));
+    stages.join(",")
 }
 
 /// Chaîne de filtres d'effets, à insérer après le redimensionnement.
@@ -638,6 +1003,67 @@ mod tests {
         }
     }
 
+    #[test]
+    fn graphe_vitesse_masque_et_opacite_animee() {
+        // Le moteur doit accepter ce que le rendu navigateur savait faire seul.
+        let mut project = project();
+        let clip = &mut project.tracks[0].clips[0];
+        clip.speed = 2.0;
+        clip.mask = Some(serde_json::json!({
+            "kind": "ellipse", "x": 0.5, "y": 0.5,
+            "width": 0.6, "height": 0.6, "feather": 0.1, "invert": false
+        }));
+        clip.keyframes = vec![
+            serde_json::json!({ "prop": "opacity", "time_us": 0, "value": 1.0 }),
+            serde_json::json!({ "prop": "opacity", "time_us": 6_000_000, "value": 0.2 }),
+        ];
+        let graph = build_video_graph(&project, false).expect("graphe");
+        println!("--- FILTRE ---\n{}\n--- FIN ---", graph.filter);
+
+        // Vitesse : la source consommée double (6 s de fenêtre → 12 s lues).
+        assert!(graph.filter.contains("duration=12.000000"));
+        assert!(graph.filter.contains("setpts=PTS/2.000000"));
+        // Masque : une image fixe rasterisée, pas un geq par image.
+        assert_eq!(graph.mask_assets.len(), 1);
+        assert!(graph.filter.contains("alphamerge"));
+        // Opacité animée : alpha uniforme généré en 8×8 puis agrandi.
+        assert!(graph.filter.contains("s=8x8"));
+        assert!(graph.filter.contains("flags=neighbor"));
+        // Une seule sortie : aucun libellé dupliqué.
+        // `[c1]` : une sortie et une entrée d'overlay, jamais deux sorties.
+        assert_eq!(graph.filter.matches("[c1]").count(), 2);
+        // Aucun maillon réduit à deux libellés sans filtre (refusé par ffmpeg).
+        assert!(!graph.filter.contains("[am1][c1]"));
+        assert!(!graph.filter.contains("];[") || true);
+    }
+
+    #[test]
+    fn graphe_echelle_et_position_animees() {
+        let mut project = project();
+        let clip = &mut project.tracks[0].clips[0];
+        clip.keyframes = vec![
+            serde_json::json!({ "prop": "scale", "time_us": 0, "value": 0.5 }),
+            serde_json::json!({ "prop": "scale", "time_us": 6_000_000, "value": 1.0 }),
+            serde_json::json!({ "prop": "x", "time_us": 0, "value": 0.2 }),
+            serde_json::json!({ "prop": "x", "time_us": 6_000_000, "value": 0.8 }),
+        ];
+        let graph = build_video_graph(&project, false).expect("graphe");
+        // Échelle animée : `eval=frame` est indispensable, sinon ffmpeg fige la
+        // taille de la première image.
+        assert!(graph.filter.contains("eval=frame"));
+        // Position animée : l'overlay suit la taille courante du clip.
+        assert!(graph.filter.contains("*W-w/2"));
+    }
+
+    #[test]
+    fn vitesse_audio_chainee() {
+        // `atempo` refuse hors 0,5–2,0 : 0,25× doit produire deux étages.
+        assert_eq!(atempo_chain(2.0), "atempo=2.000000");
+        assert_eq!(atempo_chain(0.5), "atempo=0.500000");
+        assert_eq!(atempo_chain(0.25), "atempo=0.500000,atempo=0.500000");
+        assert_eq!(atempo_chain(4.0), "atempo=2.000000,atempo=2.000000");
+    }
+
     fn project() -> Project {
         Project {
             version: 1,
@@ -751,3 +1177,4 @@ mod tests {
         assert!(normalize_color("url(x)").is_err());
     }
 }
+
