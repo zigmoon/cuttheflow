@@ -59,8 +59,50 @@ jobs:
   test:
     name: Tests du moteur
     runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.perimetre.outputs.code }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nécessaire pour comparer avec le commit précédent.
+          fetch-depth: 0
+
+      # Une faute de frappe dans le README ne doit pas relancer six
+      # compilations et republier les binaires : cela change les empreintes
+      # SHA-256 des fichiers déjà téléchargés, pour rien.
+      #
+      # Le filtre est ici plutôt que dans `paths-ignore` : `paths-ignore`
+      # s'applique aussi aux poussées d'étiquette, où GitHub ne sait pas
+      # toujours calculer les fichiers modifiés — on risquerait de sauter la
+      # construction d'une version étiquetée.
+      - name: Périmètre — du code a-t-il changé ?
+        id: perimetre
+        shell: bash
+        run: |
+          set -euo pipefail
+          publier() { echo "code=$1" >> "$GITHUB_OUTPUT"; echo "code=$1"; }
+
+          # Une demande manuelle ou une étiquette veut toujours une version.
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then publier true; exit 0; fi
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then publier true; exit 0; fi
+
+          BASE="${{ github.event.before }}"
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then publier true; exit 0; fi
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then publier true; exit 0; fi
+
+          FILES=$(git diff --name-only "$BASE" "$GITHUB_SHA")
+          echo "Fichiers modifiés :"
+          echo "$FILES" | sed 's/^/  /'
+          CODE=false
+          while IFS= read -r fichier; do
+            [ -z "$fichier" ] && continue
+            case "$fichier" in
+              *.md|docs/*|LICENSE|.gitignore|.vscode/*) ;;
+              *) CODE=true ;;
+            esac
+          done <<< "$FILES"
+          publier "$CODE"
+
       - uses: dtolnay/rust-toolchain@stable
       - name: cargo test
         run: cargo test --workspace --manifest-path rust/Cargo.toml
@@ -68,6 +110,7 @@ jobs:
   build:
     name: ${{ matrix.name }}
     needs: test
+    if: needs.test.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:

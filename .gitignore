@@ -22,6 +22,16 @@ v1/_fx/chrome-profile-*/
 v1/_fx/out/
 v1/_fx/*.mp4
 
+# Banc de régression v2, à la racine. Le profil Chrome local compte des
+# centaines de fichiers (History, Cache, Cookies) : sans ces lignes, un envoi
+# un peu large les committerait. `**/` couvre aussi les copies sous v1/.
+tools/regression/media/
+tools/regression/out/
+**/.chrome-profile/
+_fx/chrome-profile-*/
+_fx/out/
+_fx/*.mp4
+
 # Divers
 *.log
 .DS_Store
