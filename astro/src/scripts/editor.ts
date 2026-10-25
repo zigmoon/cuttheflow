@@ -138,6 +138,8 @@ class Editor implements TimelineHost {
   private engineVersion = '';
   /** `engine` = binaire Rust joignable ; `local` = tout se fait dans le navigateur. */
   private mode: 'engine' | 'local' = 'local';
+  /** Médias dont le fichier n'est plus lisible : affichés, mais marqués. */
+  private lostMedia = new Set<string>();
   private browserExport: AbortController | null = null;
   private dropDepth = 0;
 
@@ -771,7 +773,7 @@ class Editor implements TimelineHost {
   private openPreferences(): void {
     els.prefsEngine.textContent = this.engineOk
       ? t('prefs.engine', { info: this.engineSummary() })
-      : t(this.inApp ? 'prefs.engineOffApp' : 'prefs.engineOff');
+      : t(this.inApp ? 'prefs.engineOffApp' : 'prefs.engineOffWeb');
     // La version affichée est celle du bundle compilé ; celle du moteur vient de
     // `/api/health`. En mode statique il n'y a pas de moteur, donc pas de ligne.
     const engine = this.engineOk && this.engineVersion ? ` · ${t('prefs.engineVersion')} ${this.engineVersion}` : '';
@@ -930,8 +932,14 @@ class Editor implements TimelineHost {
       this.project.media = this.project.media.filter((media) => !orphanIds.has(media.id));
     }
     const missing = [...used].filter((id) => id && !available.has(id));
+    // Les médias perdus restent dans le projet (un clip les utilise) mais ne
+    // doivent pas paraître utilisables : la médiathèque les marque.
+    this.lostMedia = new Set(missing as string[]);
     if (missing.length) {
-      this.toast(t('toast.mediaMissing', { n: missing.length }), 'error');
+      this.toast(
+        t(this.inApp ? 'toast.mediaMissing' : 'toast.mediaMissingWeb', { n: missing.length }),
+        'error',
+      );
     }
 
     this.renderMediaList();
@@ -976,7 +984,13 @@ class Editor implements TimelineHost {
         this.addMediaToTrack(effective.id, track.id, this.timeUs);
         this.toast(t('toast.imported', { name: effective.name }), 'ok');
       } catch (error) {
-        this.toast(t('toast.importFailed', { error: (error as Error).message }), 'error');
+        const message = (error as Error).message;
+        this.toast(
+          t('toast.importFailed', {
+            error: message === api.STORAGE_ERROR ? t('error.storage') : message,
+          }),
+          'error',
+        );
       }
     }
     this.renderMediaList();
@@ -2096,13 +2110,24 @@ class Editor implements TimelineHost {
             ? '<span class="media-thumb audio"><svg viewBox="0 0 24 24"><use href="#i-music"></use></svg></span>'
             : `<img class="media-thumb" src="${api.thumbnailUrl(media.id)}" alt="" loading="lazy"
                  onerror="this.style.visibility='hidden'" />`;
+        // Un média dont le fichier a disparu reste visible (un clip l'utilise)
+        // mais porte une marque : sans elle il paraîtrait utilisable.
+        const lost = this.lostMedia.has(media.id);
+        const lostMark = lost
+          ? `<div class="media-lost" title="${escapeHtml(t('media.lostHint'))}">
+               <svg viewBox="0 0 24 24"><use href="#i-warning"></use></svg>
+               <span>${escapeHtml(t('media.lost'))}</span>
+             </div>`
+          : '';
         return `
-          <article class="media-card" draggable="true" data-media-id="${media.id}"
-                   role="listitem" title="${escapeHtml(t('media.cardTitle', { name: media.name }))}">
+          <article class="media-card${lost ? ' is-lost' : ''}" draggable="${lost ? 'false' : 'true'}"
+                   data-media-id="${media.id}"
+                   role="listitem" title="${escapeHtml(t(lost ? 'media.lostHint' : 'media.cardTitle', { name: media.name }))}">
             ${thumb}
             <div class="media-info">
               <div class="media-name">${escapeHtml(media.name)}</div>
               <div class="media-meta">${meta}</div>
+              ${lostMark}
             </div>
             <button class="media-delete" title="${escapeHtml(t('media.remove'))}" aria-label="${escapeHtml(
               t('media.remove'),

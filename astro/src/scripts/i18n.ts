@@ -80,6 +80,11 @@ const STRINGS: Record<string, Entry> = {
   'media.ellipseTitle': { en: 'Add an ellipse (C)', fr: 'Ajouter une ellipse (C)' },
   'media.cardTitle': { en: '{name} — drag onto the timeline', fr: '{name} — glissez sur la timeline' },
   'media.remove': { en: 'Remove from library', fr: 'Supprimer de la médiathèque' },
+  'media.lost': { en: 'source lost', fr: 'source perdue' },
+  'media.lostHint': {
+    en: 'The file behind “{name}” is no longer readable — import it again',
+    fr: 'Le fichier derrière « {name} » n’est plus lisible — réimportez-le',
+  },
 
   // ── Scène ────────────────────────────────────────────────────────────
   'stage.label': { en: 'Preview', fr: 'Prévisualisation' },
@@ -469,9 +474,9 @@ const STRINGS: Record<string, Entry> = {
     fr: 'ffmpeg introuvable, et cette compilation ne sait pas encoder en {format} par elle-même. Installez ffmpeg (winget install Gyan.FFmpeg / brew install ffmpeg / apt install ffmpeg), puis quittez et relancez CUT THE FLOW.',
   },
   'engine.fontOk': { en: 'font OK', fr: 'police OK' },
-  'prefs.engineOff': {
-    en: 'Rust engine unreachable — run `cuttheflow serve`.',
-    fr: 'Moteur Rust injoignable — lancez `cuttheflow serve`.',
+  'prefs.engineOffWeb': {
+    en: 'Encoding runs in this browser (WebCodecs). The desktop app adds the native engine.',
+    fr: 'L’encodage se fait dans ce navigateur (WebCodecs). L’application de bureau ajoute le moteur natif.',
   },
   'prefs.engineOffApp': {
     en: 'ffmpeg not found — encoding runs in the embedded view. Install ffmpeg to enable the native engine.',
@@ -495,6 +500,16 @@ const STRINGS: Record<string, Entry> = {
   'toast.mediaMissing': {
     en: '{n} project media are missing from the engine: import them again.|{n} project media are missing from the engine: import them again.',
     fr: '{n} média(s) du projet sont absents du moteur : réimportez-les.|{n} média(s) du projet sont absents du moteur : réimportez-les.',
+  },
+  // En mode navigateur il n'y a pas de moteur : le message parle du stockage
+  // du navigateur, seul endroit où le fichier pouvait disparaître.
+  'toast.mediaMissingWeb': {
+    en: 'This browser no longer holds {n} media file(s) — most likely the original file was moved or deleted. Import them again.',
+    fr: 'Ce navigateur ne détient plus {n} fichier(s) média — le fichier d’origine a sans doute été déplacé ou supprimé. Réimportez-les.',
+  },
+  'error.storage': {
+    en: 'this browser could not keep a copy of the file (storage refused). Try again, or free some disk space.',
+    fr: 'ce navigateur n’a pas pu conserver une copie du fichier (stockage refusé). Réessayez, ou libérez de l’espace disque.',
   },
   'toast.engineOfflineImport': {
     en: 'Rust engine offline: cannot import.',

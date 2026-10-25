@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [CUT THE FLOW 2 — studio web 2.7.3 / moteur 0.10.2] - 2026-10-25
+
+### 🐛 Corrigé — un média importé devenait illisible après un rechargement
+
+Reproduit sur le site en ligne, puis isolé : un fichier importé dans le studio
+web restait listé dans la médiathèque avec sa durée, mais ses octets avaient
+disparu. La prévisualisation affichait du noir et l'export échouait, **sans
+aucun message**.
+
+Cause : `importLocal()` rangeait le `File` du `<input type="file">` tel quel
+dans IndexedDB. Un `File` n'est pas une copie — le navigateur garde une
+référence au chemin d'origine. Dès que ce fichier est déplacé ou supprimé
+(fin de téléchargement, nettoyage du dossier Téléchargements, clé USB
+retirée), la lecture lève `NotFoundError` et le média est mort, pour toujours.
+
+Mesuré sur la version 2.7.2 en ligne : deux entrées stockées, `essai.mp4`
+(217 945 o) illisible, une seconde importée juste avant lisible. Suppression
+du fichier source de la seconde → elle devient illisible à son tour. Même
+fichier stocké en copie d'octets, source supprimée → lisible et décodé
+(240×100). Le diagnostic est donc établi dans les deux sens.
+
+Corrections :
+
+- `durableCopy()` persiste une **copie des octets** ; c'est la seule forme que
+  le navigateur conserve réellement.
+- L'import **relit** l'entrée qu'il vient d'écrire. Si le stockage a refusé, le
+  média est retiré et l'import échoue avec un message explicite, au lieu de
+  laisser une promesse en l'air.
+- `listMedia()` écarte les entrées illisibles avant de les annoncer, donc un
+  média perdu ne peut plus passer pour utilisable.
+- La médiathèque **marque** les médias perdus encore utilisés par un clip
+  (« source lost »), les rend non déplaçables et conservent le clip : jamais de
+  suppression silencieuse. Message au chargement : « Ce navigateur ne détient
+  plus N fichier(s) média — le fichier d'origine a sans doute été déplacé ou
+  supprimé. »
+
+### 🐛 Corrigé — message de développeur dans les préférences du site public
+
+En mode navigateur, le panneau Préférences affichait « Rust engine unreachable
+— run `cuttheflow serve` ». Un visiteur du site n'a pas de moteur à lancer.
+La ligne dit maintenant ce qui se passe et ce qu'apporte l'application de
+bureau.
+
+### 🔧 Service worker `ctf2-v16`
+
+Le shell a changé (nouvelle feuille de style, nouvelle icône `#i-warning`) :
+le cache précédent est purgé au premier chargement.
+
+---
+
 ## [CUT THE FLOW 2 — studio web 2.7.2 / moteur 0.10.2] - 2026-10-25
 
 ### 🐛 Corrigé — l'application proposait « une nouvelle version est prête », sans fin

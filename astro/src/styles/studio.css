@@ -973,6 +973,38 @@ svg {
   text-overflow: ellipsis;
 }
 
+/* Média dont le fichier a disparu : encore là (un clip l'utilise) mais
+   visiblement inutilisable — jamais une vignette noire sans explication. */
+.media-card.is-lost {
+  cursor: default;
+}
+
+.media-card.is-lost .media-thumb {
+  opacity: 0.3;
+}
+
+.media-card.is-lost .media-name {
+  color: var(--text-dim);
+}
+
+.media-lost {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--danger);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-lost svg {
+  width: 11px;
+  height: 11px;
+  flex: none;
+}
+
 .media-delete {
   position: absolute;
   top: 5px;

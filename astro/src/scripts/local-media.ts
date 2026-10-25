@@ -82,6 +82,30 @@ export async function allEntries(): Promise<LocalEntry[]> {
   return wrap<LocalEntry[]>(tx(db, 'readonly').getAll());
 }
 
+/**
+ * Un `File` sorti d'un `<input type="file">` n'est pas une copie : le
+ * navigateur garde une référence au chemin d'origine. Stocké tel quel dans
+ * IndexedDB, il devient illisible (`NotFoundError`) dès que l'utilisateur
+ * déplace ou supprime le fichier source — le média survit dans la
+ * médiathèque mais ne se décode plus. On persiste donc une copie des octets,
+ * la seule forme que le navigateur conserve réellement.
+ */
+export async function durableCopy(file: Blob): Promise<Blob> {
+  if (!(file instanceof File)) return file;
+  const bytes = await file.arrayBuffer();
+  return new Blob([bytes], { type: file.type });
+}
+
+/** Vrai si les octets sont réellement présents (et non une référence morte). */
+export async function isReadable(blob: Blob): Promise<boolean> {
+  try {
+    await blob.slice(0, 1).arrayBuffer();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /* ── URL d'objet, une seule par média (les révoquer en boucle fuit) ──────── */
 
 const urls = new Map<string, string>();

@@ -13,12 +13,17 @@ import type { ExportFormat, Media, Project } from './state';
 import {
   allEntries,
   deleteEntry,
+  durableCopy,
   getEntry,
+  isReadable,
   makeThumbnail,
   objectUrl,
   probeLocal,
   putEntry,
 } from './local-media';
+
+/** Code d'erreur : le navigateur n'a pas conservé les octets du fichier. */
+export const STORAGE_ERROR = 'storage-unavailable';
 
 const params = new URLSearchParams(location.search);
 const devPort = location.port === '4321' || location.port === '4322';
@@ -109,14 +114,20 @@ export async function listMedia(): Promise<Media[]> {
     return payload.media || [];
   }
   const entries = await allEntries();
+  const kept: typeof entries = [];
   for (const entry of entries) {
+    // Une entrée dont les octets ont disparu (fichier source effacé) ne peut
+    // être ni prévisualisée ni exportée : la lister laisserait croire qu'elle
+    // est utilisable. On l'écarte et l'appelant signale les médias perdus.
+    if (!(await isReadable(entry.file))) continue;
+    kept.push(entry);
     if (entry.thumb) localThumbs.set(entry.id, entry.thumb);
     if (!localUrls.has(entry.id)) {
       const url = await objectUrl(entry.id);
       if (url) localUrls.set(entry.id, url);
     }
   }
-  return entries.map((entry) => entry.media);
+  return kept.map((entry) => entry.media);
 }
 
 export function importMedia(
@@ -158,7 +169,15 @@ async function importLocal(file: File, onProgress?: (percent: number) => void): 
   onProgress?.(60);
   const thumb = media.kind === 'image' ? null : await makeThumbnail(file);
   onProgress?.(85);
-  await putEntry({ id, name: file.name, file, thumb, media });
+  const stored = await durableCopy(file);
+  await putEntry({ id, name: file.name, file: stored, thumb, media });
+  // Vérification immédiate : mieux vaut refuser l'import que de laisser un
+  // média inutilisable apparaître dans la médiathèque au prochain rechargement.
+  const back = await getEntry(id);
+  if (!back || !(await isReadable(back.file))) {
+    await deleteEntry(id).catch(() => {});
+    throw new Error(STORAGE_ERROR);
+  }
   const url = await objectUrl(id);
   if (url) localUrls.set(id, url);
   if (thumb) localThumbs.set(id, thumb);
