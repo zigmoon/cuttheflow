@@ -28,6 +28,12 @@
 </p>
 
 <p align="center">
+  <sub>Nothing to install? The same studio runs online at
+  <a href="https://app.zigmoon.com/CUTTHEFLOW/">app.zigmoon.com/CUTTHEFLOW</a> —
+  export is encoded by WebCodecs in your browser.</sub>
+</p>
+
+<p align="center">
   <a href="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml"><img alt="Build" src="https://github.com/zigmoon/cuttheflow/actions/workflows/build.yml/badge.svg?branch=main"></a>
   <img alt="Latest release" src="https://img.shields.io/github/v/release/zigmoon/cuttheflow?label=version&color=2ea043">
   <img alt="Downloads" src="https://img.shields.io/github/downloads/zigmoon/cuttheflow/total?label=t%C3%A9l%C3%A9chargements&color=2ea043">
