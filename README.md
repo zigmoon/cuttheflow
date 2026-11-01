@@ -164,8 +164,13 @@ model.
 
 **Timeline**
 - video and audio tracks, as many as you need
-- dragging from the media panel **creates a track at the drop point** and places
-  the clip exactly where you released it
+- drag a clip **up or down to change track** (the target row highlights; a track
+  that cannot hold that clip is outlined instead of silently losing it);
+  `Alt + ↑/↓` does the same from the keyboard
+- dragging from the media panel places the clip **exactly where you release it**,
+  on the hovered track when it is free at that instant — otherwise a new track
+  opens at that row. A clip is never pushed after the last shot: that is what
+  made a dropped media look like it « went to the end »
 - trim either edge, snap to clips / playhead / zero
 - split, duplicate, delete; undo / redo across every edit
 - zoom 0.25 → 1024 px/s with Ctrl + wheel, centred on the cursor; `Ctrl+Shift+0`
@@ -181,8 +186,9 @@ model.
   clip on the timeline instead of trimming it, audio included
 - **masks**: rectangle or ellipse, feathered, invertible; the mask cuts the clip
   itself, not the layers underneath
-- fades, 13 effects (blur, shine, pixelate, mirror, glitch, VHS, duotone…),
-  fade and dissolve transitions, text and shape clips
+- fades, 13 effects (blur, sharpen, vignette, grain, brightness, grayscale,
+  sepia, warm, cool, invert, mirror, flip, pixelate), fade and dissolve
+  transitions, text and shape clips
 
 **Studio**
 - French and English UI, dark and light themes
@@ -276,13 +282,15 @@ audio tracks with 880/1500/1200 Hz beacons) and inspects the files with ffmpeg.
 
 ```bash
 cd rust
-cargo test --workspace                # 32 unit tests
+cargo test --workspace                # 45 unit tests
 node scripts/verify-export.mjs        # 45 ffmpeg checks
 ```
 
-Interface: `npm run check` → 0 error, 0 warning; `node tools/v3-test.cjs` →
-**32/32** in a real Chrome (drag-and-drop, zoom, scrub-while-playing, undo,
-keyframes, masks, service-worker update, engine badge states). Effects and
+Interface: `npm run check` → 0 error, 0 warning (0 hint); `node tools/v3-test.cjs`
+→ **35/35** in a real Chrome (import, drag-and-drop on a row, **vertical drag to
+another track** and its refusal on an incompatible track, zoom, scrub-while-playing,
+undo, keyframes, masks, no untranslated key on screen in either language,
+service-worker update, engine badge states). Effects and
 transitions were verified on real pixels (sepia `44,39,30`; ellipse `#F0F0F2`; a
 0.5 s dissolve reading `29,29,29` → `121,13,68` → `201,0,102`, i.e. the two
 sources really mixed). Static fidelity in browser export: PSNR **43.6 dB**,

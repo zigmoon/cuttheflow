@@ -28,8 +28,6 @@ const MAX_PREVIEW_WIDTH = 1440;
  * un `currentTime` = décodage interrompu = saccade).
  */
 const DRIFT_SECONDS = 0.06;
-/** Au-delà, on ne corrige plus en douceur : l'élément est vraiment perdu. */
-const DRIFT_HARD_SECONDS = 0.4;
 /** Fenêtre de pré-roulage : les clips à venir sont chargés et positionnés. */
 const PREROLL_US = 900_000;
 /**

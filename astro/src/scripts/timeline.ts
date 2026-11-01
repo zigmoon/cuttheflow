@@ -103,6 +103,13 @@ export class TimelineView {
   }
 
   render(): void {
+    // Une reconstruction remplace les éléments : un geste en cours n'a plus
+    // d'élément à suivre. Sans cette remise à zéro, un `pointermove` ultérieur
+    // déplaçait encore le clip — sans passer par l'historique, donc impossible
+    // à annuler.
+    this.drag = null;
+    this.clearTrackHints();
+    this.clearDropHints();
     this.content.style.width = `${this.contentWidth()}px`;
     this.renderRuler();
     this.renderHeaders();
@@ -452,7 +459,14 @@ export class TimelineView {
         rows: this.rowBounds(),
         snapPoints: this.snapPoints(found.clip.id),
       };
-      clipElement.setPointerCapture(event.pointerId);
+      // La capture du pointeur garde le geste vivant même quand l'élément change
+      // de piste (donc de parent). Elle échoue sur un `pointerId` synthétique
+      // (test automatisé) : le glissement doit rester fonctionnel malgré tout.
+      try {
+        clipElement.setPointerCapture(event.pointerId);
+      } catch {
+        // pointeur inconnu : on continue sans capture
+      }
       event.preventDefault();
     });
 

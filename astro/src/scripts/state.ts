@@ -454,10 +454,6 @@ export function createProject(): Project {
   };
 }
 
-export function firstTrackFor(project: Project, media: Media): Track | undefined {
-  return project.tracks.find((track) => trackAcceptsMedia(track, media));
-}
-
 /**
  * La plage `[start, start + duration)` est-elle libre sur cette piste ?
  *

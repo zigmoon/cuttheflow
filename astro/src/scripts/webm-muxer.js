@@ -66,9 +66,6 @@ const WebMMuxer = (() => {
         ];
     }
 
-    // Unknown size marker (for streaming Segment)
-    const UNKNOWN_SIZE = [0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
-
     // Encode unsigned integer to minimal bytes
     function encodeUint(value, forceBytes) {
         const bytes = [];
@@ -126,7 +123,6 @@ const WebMMuxer = (() => {
      * @param {Object} params
      * @param {number} params.width
      * @param {number} params.height
-     * @param {number} params.fps
      * @param {number} params.durationMs - Total duration in milliseconds
      * @param {number} params.sampleRate
      * @param {number} params.channels
@@ -138,7 +134,7 @@ const WebMMuxer = (() => {
      */
     function mux(params) {
         const {
-            width, height, fps, durationMs,
+            width, height, durationMs,
             sampleRate, channels,
             videoChunks, audioChunks,
             codecPrivate, opusHead

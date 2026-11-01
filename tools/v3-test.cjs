@@ -758,6 +758,10 @@ async function main() {
     );
 
     // ── Ergonomie : ajout par clic (pas un dépôt) ─────────────────────
+    // Règle voulue : le clip se pose À L'INSTANT demandé sur une piste libre ;
+    // si la piste est déjà occupée à cet instant, une piste s'ouvre. Il ne
+    // doit JAMAIS être repoussé après la dernière séquence (c'était le défaut
+    // « le média part à la fin »).
     const clickAdd = await cdp.eval(`
       (async () => {
         const ctf = window.ctf;
@@ -765,27 +769,30 @@ async function main() {
           { id: 'v1', kind: 'video', name: 'VIDEO 1', muted: false, volume: 1, clips: [] },
         ];
         const media = ctf.project.media.find(m => m.kind === 'video');
-        // Sans l'option newTrack : on réutilise la piste compatible existante.
         ctf.addMediaToTrack(media.id, 'v1', 0);
-        const first = ctf.project.tracks.length;
-        // Deuxième ajout au même instant : le clip se cale après le premier.
+        // Deuxième ajout au même instant : la place est prise, une piste s'ouvre.
         ctf.addMediaToTrack(media.id, 'v1', 0);
-        const clips = ctf.project.tracks[0].clips;
+        // Troisième ajout, plus loin : la place est libre sur VIDEO 1.
+        ctf.addMediaToTrack(media.id, 'v1', 20_000_000);
+        const all = ctf.project.tracks.flatMap(t => t.clips.map(c => c.start_us)).sort((a, b) => a - b);
         return {
           tracks: ctf.project.tracks.length,
-          first,
-          starts: clips.map(c => c.start_us),
-          count: clips.length,
+          kinds: ctf.project.tracks.map(t => t.kind),
+          perTrack: ctf.project.tracks.map(t => t.clips.length),
+          all,
         };
       })()
     `);
     check(
-      'ajout par clic : même piste, clips empilés à la suite',
-      clickAdd.tracks === 1 &&
-        clickAdd.count === 2 &&
-        clickAdd.starts[0] === 0 &&
-        clickAdd.starts[1] === 6_000_000,
-      `${clickAdd.count} clips sur ${clickAdd.tracks} piste, départs ${clickAdd.starts
+      'ajout par clic : piste visée si libre, sinon piste neuve — jamais repoussé',
+      clickAdd.tracks === 2 &&
+        clickAdd.perTrack[0] === 2 &&
+        clickAdd.perTrack[1] === 1 &&
+        clickAdd.all[0] === 0 &&
+        clickAdd.all[1] === 0 &&
+        clickAdd.all[2] === 20_000_000 &&
+        clickAdd.kinds.every((k) => k === 'video'),
+      `${clickAdd.tracks} pistes (${clickAdd.perTrack.join('+')} clip), départs ${clickAdd.all
         .map((s) => (s / 1e6).toFixed(2) + 's')
         .join(' / ')}`,
     );
@@ -857,6 +864,95 @@ async function main() {
       Math.abs(handle.dragged - 3_000_000) < 60_000 && handle.selected === true,
       `${(handle.dragged / 1e6).toFixed(2)} s ; clip voisin toujours sélectionnable : ${handle.selected}`,
     );
+
+    // ── Changement de piste à la souris (glissement vertical) ─────────
+    const verticalDrag = await cdp.eval(`
+      (async () => {
+        const ctf = window.ctf;
+        const media = ctf.project.media.find(m => m.kind === 'video');
+        ctf.project.tracks = [
+          { id: 'v1', kind: 'video', name: 'VIDEO 1', muted: false, volume: 1, clips: [] },
+          { id: 'v2', kind: 'video', name: 'VIDEO 2', muted: false, volume: 1, clips: [] },
+          { id: 'a1', kind: 'audio', name: 'AUDIO 1', muted: false, volume: 1, clips: [] },
+        ];
+        ctf.zoom = 64;
+        ctf.addMediaToTrack(media.id, 'v1', 0);
+        ctf.timeline.render();
+        await new Promise(r => setTimeout(r, 80));
+
+        const clip = document.querySelector('.clip');
+        const cb = clip.getBoundingClientRect();
+        const rows = [...document.querySelectorAll('.track-row')];
+        const rowVideo2 = rows[1].getBoundingClientRect();
+        const rowAudio = rows[2].getBoundingClientRect();
+        const x = cb.left + 40;
+        const y0 = cb.top + cb.height / 2;
+        const container = document.querySelector('#tracks');
+        const fire = (el, type, y) => el.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, button: 0, pointerId: 1,
+          clientX: x, clientY: y,
+        }));
+
+        // 1) vers VIDEO 2 : la piste doit changer, l'instant rester le même.
+        fire(clip, 'pointerdown', y0);
+        fire(container, 'pointermove', y0);
+        fire(container, 'pointermove', rowVideo2.top + rowVideo2.height / 2);
+        const hintTarget = rows[1].classList.contains('drag-target');
+        window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+        const afterMove = {
+          v1: ctf.project.tracks[0].clips.length,
+          v2: ctf.project.tracks[1].clips.length,
+          start: ctf.project.tracks[1].clips[0]?.start_us ?? -1,
+        };
+
+        // 2) vers la piste audio : refusé, le clip reste sur VIDEO 2.
+        ctf.timeline.render();
+        await new Promise(r => setTimeout(r, 60));
+        // Le rendu remplace les lignes : il faut les réinterroger.
+        const rows2 = [...document.querySelectorAll('.track-row')];
+        const rowAudio2 = rows2[2].getBoundingClientRect();
+        const clip2 = document.querySelector('.clip');
+        const cb2 = clip2.getBoundingClientRect();
+        const y1 = cb2.top + cb2.height / 2;
+        const fire2 = (el, type, y) => el.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, button: 0, pointerId: 2,
+          clientX: cb2.left + 40, clientY: y,
+        }));
+        fire2(clip2, 'pointerdown', y1);
+        fire2(container, 'pointermove', y1);
+        fire2(container, 'pointermove', rowAudio2.top + rowAudio2.height / 2);
+        const blockedHint = rows2[2].classList.contains('drag-blocked');
+        window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+        const afterBlocked = {
+          audio: ctf.project.tracks[2].clips.length,
+          v2: ctf.project.tracks[1].clips.length,
+        };
+
+        // 3) le geste est bien dans l'historique (annulable).
+        const beforeUndo = ctf.project.tracks.map(t => t.clips.length).join(',');
+        ctf.undo();
+        const afterUndo = ctf.project.tracks.map(t => t.clips.length).join(',');
+
+        return { hintTarget, afterMove, blockedHint, afterBlocked, beforeUndo, afterUndo };
+      })()
+    `);
+    check(
+      'glissement vertical : le clip change de piste, geste annulable',
+      verticalDrag.afterMove.v1 === 0 &&
+        verticalDrag.afterMove.v2 === 1 &&
+        verticalDrag.afterMove.start === 0 &&
+        verticalDrag.hintTarget === true &&
+        verticalDrag.afterUndo !== verticalDrag.beforeUndo,
+      `VIDEO 1 → VIDEO 2 (départ ${(verticalDrag.afterMove.start / 1e6).toFixed(2)} s), piste visée signalée : ${verticalDrag.hintTarget}, historique : ${verticalDrag.beforeUndo} → ${verticalDrag.afterUndo}`,
+    );
+    check(
+      'glissement vertical : une piste audio refuse un clip vidéo',
+      verticalDrag.afterBlocked.audio === 0 &&
+        verticalDrag.afterBlocked.v2 === 1 &&
+        verticalDrag.blockedHint === true,
+      `AUDIO 1 : ${verticalDrag.afterBlocked.audio} clip, VIDEO 2 : ${verticalDrag.afterBlocked.v2} clip, refus signalé : ${verticalDrag.blockedHint}`,
+    );
+
     // ── Dépôt = piste neuve, pile à l'instant déposé ──────────────────
     const dropNewTrack = await cdp.eval(`
       (async () => {
@@ -970,6 +1066,70 @@ async function main() {
       'version du studio affichée dans les Préférences',
       versionUi.visible === true && /^Studio \d+\.\d+\.\d+/.test(versionUi.text),
       `« ${versionUi.text} »`,
+    );
+
+    // ── Aucune clé de traduction brute visible ────────────────────────
+    // Un `t('field.speed')` sans entrée dans `STRINGS` affiche la clé telle
+    // quelle : c'est exactement ce qui est arrivé au curseur de vitesse. On
+    // balaie le texte ET les infobulles, dans les deux langues, avec un clip
+    // sélectionné (le panneau Propriétés est alors complet).
+    const rawKeys = await cdp.eval(`
+      (async () => {
+        const ctf = window.ctf;
+        const media = ctf.project.media.find(m => m.kind === 'video');
+        ctf.project.tracks = [
+          { id: 'v1', kind: 'video', name: 'VIDEO 1', muted: false, volume: 1, clips: [] },
+        ];
+        ctf.addMediaToTrack(media.id, 'v1', 0);
+        ctf.timeline.render();
+        await new Promise(r => setTimeout(r, 120));
+
+        const looksLikeKey = (text) =>
+          /^[a-z][a-zA-Z0-9]*\\.[a-zA-Z0-9._]+$/.test(text) &&
+          !/\\.(mp4|webm|mov|mp3|wav|json|png|jpe?g|svg|css|js)$/i.test(text);
+
+        const scan = () => {
+          const found = new Set();
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          let node;
+          while ((node = walker.nextNode())) {
+            const text = node.textContent.trim();
+            if (text && looksLikeKey(text)) found.add(text);
+          }
+          document.querySelectorAll('[title],[aria-label],[placeholder]').forEach((el) => {
+            for (const attr of ['title', 'aria-label', 'placeholder']) {
+              const value = el.getAttribute(attr);
+              if (value && looksLikeKey(value.trim())) found.add(attr + '=' + value.trim());
+            }
+          });
+          return [...found];
+        };
+
+        // Sélectionne le clip pour peupler le panneau Propriétés.
+        const clip = document.querySelector('.clip');
+        const box = clip.getBoundingClientRect();
+        clip.dispatchEvent(new PointerEvent('pointerdown', {
+          bubbles: true, cancelable: true, button: 0,
+          clientX: box.left + 30, clientY: box.top + box.height / 2,
+        }));
+        window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+        await new Promise(r => setTimeout(r, 150));
+
+        const results = {};
+        for (const lang of ['fr', 'en']) {
+          document.querySelector('[data-lang-choice="' + lang + '"]')?.click();
+          await new Promise(r => setTimeout(r, 150));
+          results[lang] = scan();
+        }
+        return results;
+      })()
+    `);
+    check(
+      'aucune clé de traduction brute à l’écran (FR et EN)',
+      rawKeys.fr.length === 0 && rawKeys.en.length === 0,
+      rawKeys.fr.length || rawKeys.en.length
+        ? `fr : ${rawKeys.fr.join(', ')} | en : ${rawKeys.en.join(', ')}`
+        : 'texte et infobulles propres dans les deux langues',
     );
 
     // Même ligne quand un moteur répond : la version vient de /api/health.

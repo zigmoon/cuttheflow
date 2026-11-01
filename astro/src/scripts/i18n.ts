@@ -179,6 +179,7 @@ const STRINGS: Record<string, Entry> = {
   'field.y': { en: 'Position Y', fr: 'Position Y' },
   'field.rotation': { en: 'Rotation', fr: 'Rotation' },
   'field.opacity': { en: 'Opacity', fr: 'Opacité' },
+'field.speed': { en: 'Playback speed', fr: 'Vitesse de lecture' },
   'field.size': { en: 'Size', fr: 'Taille' },
   'field.color': { en: 'Colour', fr: 'Couleur' },
   'field.type': { en: 'Type', fr: 'Type' },

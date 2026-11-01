@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [CUT THE FLOW 2 — studio web 2.7.5 / moteur 0.10.2] - 2026-11-01
+
+### 🐛 Corrigé — le champ « Vitesse » affichait `field.speed`
+
+Le libellé du curseur de vitesse utilisait une clé de traduction absente de
+`i18n.ts` ; `t()` renvoie alors la clé telle quelle. Les deux langues affichaient
+donc littéralement `field.speed` dans le panneau Propriétés. Le libellé est
+maintenant « Vitesse de lecture » / « Playback speed » — et non « Vitesse », qui
+aurait répété le titre de section juste au-dessus.
+
+Un contrôle automatique (`tools/v3-test.cjs`) vérifie désormais qu'aucune clé
+brute n'apparaît dans l'interface, en français comme en anglais.
+
+### 🐛 Corrigé — l'export MP4 annonçait une durée de 0 s
+
+`mp4box.js` recopie dans `mvhd` le `timescale` et la `duration` du **premier**
+`addTrack`. Nous ne fournissions pas `duration` : l'en-tête du film disait 0 s
+(celui des pistes média aussi). Chrome et ffmpeg recalculent depuis les tables
+d'échantillons, donc la lecture et le seek fonctionnaient — mais un outil qui se
+fie à `mvhd` affichait 00:00 et refusait d'aller plus loin.
+
+Les trois niveaux sont désormais déclarés : `mvhd.duration` (film),
+`tkhd.duration` (piste, en timescale du film) et `mdhd.duration` (média, dans le
+timescale de la piste). Vérifié après correction : 6,000 s annoncées, 180 images,
+`avc1.640032` en 1920×1080.
+
+### 🐛 Corrigé — un rendu pendant un glissement déplaçait un clip sans historique
+
+Si la timeline se reconstruisait pendant un geste (ajout de piste, changement de
+langue, undo clavier…), l'état de glissement restait en mémoire alors que son
+élément avait disparu : le `pointermove` suivant déplaçait encore le clip, et
+**hors historique** — impossible à annuler. `render()` remet maintenant l'état de
+glissement à zéro.
+
+`setPointerCapture()` est aussi protégé : sur un pointeur inconnu (événement
+synthétique, pointeur déjà relâché) il levait une exception qui interrompait le
+gestionnaire.
+
+### ✅ Tests — la règle de dépôt est verrouillée
+
+`tools/v3-test.cjs` passe de 32 à **35 contrôles** :
+
+- « ajout par clic : piste visée si libre, sinon piste neuve — jamais repoussé »
+  remplace l'ancienne assertion qui exigeait l'empilement après la dernière
+  séquence (le défaut signalé) ;
+- « glissement vertical : le clip change de piste, geste annulable » ;
+- « glissement vertical : une piste audio refuse un clip vidéo » ;
+- « aucune clé de traduction brute à l'écran (FR et EN) », qui aurait attrapé le
+  `field.speed` ci-dessus.
+
+### 📝 Documentation
+
+- README : la règle de dépôt est décrite telle qu'elle est (plus « crée toujours
+  une piste »), la liste des effets correspond aux 13 effets réellement livrés
+  (`shine`, `glitch`, `VHS`, `duotone` n'existaient qu'en v1), les compteurs de
+  tests sont à jour (45 tests Rust, 34 contrôles d'interface).
+- CHANGELOG : les mentions `yourusername` (URL de support mortes), la licence
+  « MIT » erronée et le lien vers un fichier supprimé sont corrigés ; la section
+  « Planned Features » ne liste plus des fonctions déjà livrées.
+- `V2-ASTRO-RUST.md` : la feuille de route ne réclame plus les keyframes, la
+  vitesse, les masques ni les formes d'onde (livrés), ni la signature macOS
+  (automatique dans la CI).
+
+### 🧹 Ménage
+
+- `state.ts` : `firstTrackFor()` supprimé (plus aucun appelant après la nouvelle
+  règle de placement).
+- `webm-muxer.js` : paramètre `fps` et constante `UNKNOWN_SIZE` inutilisés
+  retirés. `astro check` passe à **0 erreur, 0 avertissement, 0 indice**.
+
+---
+
 ## [CUT THE FLOW 2 — studio web 2.7.4 / moteur 0.10.2] - 2026-11-01
 
 ### 🐛 Corrigé — un clip ne pouvait pas changer de piste à la souris
@@ -2309,40 +2381,33 @@ VIDEO, plus **musique 30 s** sur une piste AUDIO. Résultat : durée **95,000000
 
 ## [Unreleased]
 
-### Planned Features
-- [ ] Real-time effects and filters
-- [ ] Transitions between clips
-- [ ] Text and titles overlay
-- [ ] Color correction tools
-- [ ] Advanced audio effects
-- [ ] Batch export
-- [ ] Cloud storage integration
-- [ ] Collaborative editing
+Les fonctionnalités autrefois listées ici (transitions, texte, effets, étalonnage)
+sont livrées : voir les entrées 2.x ci-dessus et la feuille de route dans
+[V2-ASTRO-RUST.md](V2-ASTRO-RUST.md).
 
 ---
 
-## Version History
+## Version History (v1)
 
-| Version | Date | Description |
-|---------|------|-------------|
-| **1.1.0** | 2025-11-19 | GPU Acceleration |
-| **1.0.0** | 2024-XX-XX | Initial Release |
+Les entrées v1 ci-dessus sont conservées pour mémoire ; les fichiers de cette
+génération sont rangés dans [v1/](v1/).
 
 ---
 
 ## Support
 
 - 📖 [Documentation](README.md)
-- 🐛 [Report a bug](https://github.com/yourusername/cuttheflow/issues)
-- 💡 [Request a feature](https://github.com/yourusername/cuttheflow/issues)
-- 💬 [Discussions](https://github.com/yourusername/cuttheflow/discussions)
+- 🐛 [Signaler un problème](https://github.com/zigmoon/cuttheflow/issues)
+- 💡 [Proposer une fonctionnalité](https://github.com/zigmoon/cuttheflow/issues)
+- 🎬 [Studio en ligne](https://app.zigmoon.com/CUTTHEFLOW/)
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Propriétaire — voir [LICENSE](LICENSE). Le studio est libre d'utilisation ; le
+code source ne l'est pas. Les mentions « MIT » des entrées v1 ci-dessus étaient
+erronées : elles sont corrigées ici, la licence propriétaire s'applique à
+l'ensemble du projet.
 
----
-
-*For more detailed technical information about the GPU acceleration feature, see [GPU-IMPLEMENTATION-SUMMARY.md](GPU-IMPLEMENTATION-SUMMARY.md)*
+*Les guides techniques de la v1 (GPU, export, 4K) se trouvent dans [v1/](v1/).*

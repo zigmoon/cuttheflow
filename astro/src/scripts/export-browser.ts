@@ -593,8 +593,23 @@ function muxMp4(
   const file = MP4Box.createFile();
   const TIMESCALE = 90_000;
   const ticksAt = (n: number): number => Math.round((n * TIMESCALE) / fps);
+  // ── Durées déclarées dans les en-têtes ───────────────────────────────
+  // mp4box.js recopie dans `mvhd` le `timescale` et la `duration` du PREMIER
+  // `addTrack` ; sans `duration`, le film était annoncé long de 0 s. Les
+  // navigateurs recalculent depuis les pistes et lisaient bien 6 s, mais un
+  // outil qui se fie à `mvhd` (QuickTime, certains monteurs) affichait 00:00
+  // et refusait d'aller plus loin. On déclare donc les trois niveaux :
+  // `mvhd.duration` (film), `tkhd.duration` (piste) et `mdhd.duration` (média).
+  const totalVideoTicks = ticksAt(videoChunks.length);
+  const audioSeconds =
+    audioChunks.length > 0
+      ? Math.max(...audioChunks.map((chunk) => (chunk.timestamp + chunk.duration) / 1_000_000))
+      : 0;
+  const totalAudioSamples = Math.round(audioSeconds * SAMPLE_RATE);
   const videoTrack = file.addTrack({
     timescale: TIMESCALE,
+    duration: totalVideoTicks,
+    media_duration: totalVideoTicks,
     width,
     height,
     nb_samples: videoChunks.length,
@@ -618,6 +633,9 @@ function muxMp4(
   if (audioChunks.length && aacDescription) {
     const audioTrack = file.addTrack({
       timescale: SAMPLE_RATE,
+      // `tkhd.duration` est exprimé dans le timescale du FILM (90 000).
+      duration: Math.round((audioSeconds * TIMESCALE)),
+      media_duration: totalAudioSamples,
       type: 'mp4a',
       hdlr: 'soun',
       nb_samples: audioChunks.length,

@@ -324,9 +324,15 @@ modifiés. Les binaires sont reconstruits parce que `astro/dist` y est embarqué
 
 ## Ce qu'il reste à faire
 
-1. Signer les binaires macOS produits localement avant diffusion (ad-hoc minimum).
-2. Exposer les sous-titres, les proxys 4K, les keyframes, la vitesse/rampe, les
-   masques et les formes d'onde audio (le modèle et le moteur sont déjà prévus).
-3. Embarquer ffmpeg (ou un installeur qui le pose à côté du binaire) pour
+1. **Sous-titres** et **proxys 4K** : les deux seules fonctions du modèle v1 qui
+   n'ont pas encore d'équivalent ici (les keyframes, la vitesse, les masques et
+   les formes d'onde sont livrés et couverts par `tools/v3-test.cjs`).
+2. Embarquer ffmpeg (ou un installeur qui le pose à côté du binaire) pour
    supprimer la dépendance externe.
-4. Tests d'interface automatisés (aujourd'hui vérifiés à la main dans Chrome).
+3. Étendre les tests d'interface : `tools/v3-test.cjs` (34 contrôles dans un vrai
+   Chrome) couvre l'essentiel ; les exports natifs restent vérifiés par
+   `rust/scripts/verify-export.mjs`.
+
+Pour mémoire, livré depuis : signature macOS ad-hoc automatique dans la CI
+(signature Developer ID + notarisation dès que les secrets correspondants sont
+fournis).
