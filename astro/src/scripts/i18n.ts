@@ -568,6 +568,11 @@ const STRINGS: Record<string, Entry> = {
   'status.rectAdded': { en: 'Rectangle added', fr: 'Rectangle ajouté' },
   'status.clipDeleted': { en: 'Clip deleted', fr: 'Clip supprimé' },
   'status.clipDuplicated': { en: 'Clip duplicated', fr: 'Clip dupliqué' },
+  'status.clipMoved': { en: 'Clip moved to {track}', fr: 'Clip déplacé sur {track}' },
+  'status.noTrackInThatDirection': {
+    en: 'No track of that type in that direction',
+    fr: 'Aucune piste de ce type dans cette direction',
+  },
   'status.clipSplit': { en: 'Clip split at playhead', fr: 'Clip coupé au playhead' },
   'status.snapOn': { en: 'Snapping on', fr: 'Accrochage actif' },
   'status.snapOff': { en: 'Snapping off', fr: 'Accrochage désactivé' },
@@ -592,6 +597,10 @@ const STRINGS: Record<string, Entry> = {
   'sc.focus': {
     en: 'Focus the preview / bring the timeline back',
     fr: 'Focus sur l’aperçu / réafficher la timeline',
+  },
+  'sc.moveTrack': {
+    en: 'Move the clip up / down one track',
+    fr: 'Déplacer le clip d’une piste vers le haut / le bas',
   },
   'sc.zoom': { en: 'Zoom the timeline in / out', fr: 'Zoomer / dézoomer la timeline' },
   'sc.fitTimeline': { en: 'Fit the whole edit in the window', fr: 'Afficher tout le montage' },

@@ -27,9 +27,9 @@ import {
   createProject,
   createShapeClip,
   createTextClip,
+  defaultDuration,
   duplicateClip,
   findClip,
-  firstTrackFor,
   fps,
   fpsValue,
   formatTimecode,
@@ -40,7 +40,9 @@ import {
   parseSeconds,
   placeClip,
   quantize,
+  slotFree,
   timelineEnd,
+  trackAcceptsMedia,
   uid,
   valueAt,
 } from './state';
@@ -96,6 +98,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ['C', 'sc.ellipse'],
   ['N', 'sc.snap'],
   ['F', 'sc.focus'],
+  ['Alt + ↑ / ↓', 'sc.moveTrack'],
   ['+ / -', 'sc.zoom'],
   ['Ctrl + Shift + 0', 'sc.fitTimeline'],
   ['Ctrl + 0', 'sc.fit'],
@@ -362,12 +365,14 @@ class Editor implements TimelineHost {
    *
    * Deux gestes, deux règles :
    *
-   * - **Dépôt depuis le chutier** (`newTrack`) : on construit **toujours** une
-   *   piste neuve du type du média, insérée à la ligne survolée, et le clip
-   *   tombe exactement à l'instant du dépôt. C'est le geste « poser une nouvelle
-   *   couche ici ».
-   * - **Ajout par clic, import** : on réutilise la première piste compatible, le
-   *   clip se décale après ce qui gêne. C'est le geste « empiler à la suite ».
+   * - **Dépôt depuis le chutier** (`newTrack`) : la piste survolée si elle est
+   *   libre à cet instant (décision prise par la timeline), sinon une piste
+   *   neuve du type du média, insérée à la ligne survolée. Le clip tombe
+   *   exactement à l'instant du dépôt.
+   * - **Ajout par clic, import** : première piste compatible **libre à cet
+   *   instant** ; si toutes sont occupées, on ouvre une piste. On ne refoule
+   *   jamais le clip après la dernière séquence — c'est le comportement qui
+   *   faisait « déposer à la fin ».
    */
   addMediaToTrack(
     mediaId: string,
@@ -381,35 +386,41 @@ class Editor implements TimelineHost {
       ? this.project.tracks.findIndex((candidate) => candidate.id === trackId)
       : -1;
     const kind: TrackKind = media.kind === 'audio' ? 'audio' : 'video';
+    const duration = defaultDuration(media);
+    const start = quantize(Math.max(0, startUs));
 
     let track: Track | undefined;
     let created = false;
     if (options.newTrack) {
-      // Insertion à la ligne survolée ; sous la dernière piste, on empile à la
-      // fin — il n'y a pas de ligne pour dire « ici ».
+      // Insertion à la ligne survolée ; dans le vide sous la dernière piste,
+      // on empile à la fin — il n'y a pas de ligne pour dire « ici ».
       track = this.addTrack(kind, droppedIndex >= 0 ? droppedIndex : this.project.tracks.length);
       created = true;
     } else {
-      const existing = firstTrackFor(this.project, media);
-      if (existing) {
-        track = existing;
+      // Priorité à la piste explicitement visée (dépôt sur une ligne précise),
+      // puis première piste compatible libre, sinon piste neuve.
+      const hinted = droppedIndex >= 0 ? this.project.tracks[droppedIndex] : undefined;
+      if (hinted && trackAcceptsMedia(hinted, media) && slotFree(hinted, start, duration)) {
+        track = hinted;
       } else {
+        track = this.project.tracks.find(
+          (candidate) =>
+            trackAcceptsMedia(candidate, media) && slotFree(candidate, start, duration),
+        );
+      }
+      if (!track) {
         track = this.addTrack(kind, this.project.tracks.length);
         created = true;
       }
     }
 
-    const clip = createClip(media, startUs);
-    if (created) {
-      // Piste neuve : le clip reste pile là où on l'a lâché. Passer par
-      // `placeClip` le ferait glisser après la dernière séquence si un clip
-      // traînait plus loin — exactement ce qu'on ne veut pas.
-      clip.start_us = quantize(Math.max(0, startUs));
-      track.clips.push(clip);
-      track.clips.sort((a, b) => a.start_us - b.start_us);
-    } else {
-      placeClip(track, clip, startUs);
-    }
+    const clip = createClip(media, start);
+    // Le clip reste pile là où il a été demandé : sur une piste neuve comme
+    // sur une piste libre, aucun décalage n'est nécessaire.
+    clip.start_us = start;
+    track.clips.push(clip);
+    track.clips.sort((a, b) => a.start_us - b.start_us);
+
     this.selectedClipId = clip.id;
     this.afterEdit();
 
@@ -620,8 +631,9 @@ class Editor implements TimelineHost {
       }
       const media = mediaById(this.project, mediaId);
       if (!media) return;
-      const track = firstTrackFor(this.project, media) ?? this.addTrack(media.kind === 'audio' ? 'audio' : 'video');
-      this.addMediaToTrack(media.id, track.id, this.timeUs);
+      // Clic sur une carte : le média se pose au playhead sur une piste libre,
+      // sinon une piste s'ouvre (jamais « à la fin » de la dernière séquence).
+      this.addMediaToTrack(media.id, null, this.timeUs);
     });
     els.mediaList.addEventListener('dragstart', (event) => {
       const target = event.target as HTMLElement;
@@ -629,7 +641,11 @@ class Editor implements TimelineHost {
       if (!card?.dataset.mediaId || !event.dataTransfer) return;
       event.dataTransfer.setData('application/x-ctf-media', card.dataset.mediaId);
       event.dataTransfer.effectAllowed = 'copy';
+      // La timeline ne peut pas relire le `DataTransfer` pendant le survol :
+      // elle reçoit l'identifiant ici pour annoncer la bonne décision.
+      this.timeline.setDraggedMedia(card.dataset.mediaId);
     });
+    els.mediaList.addEventListener('dragend', () => this.timeline.setDraggedMedia(null));
 
     document.addEventListener('keydown', (event) => this.onKeyDown(event));
     window.addEventListener('beforeunload', () => this.persist());
@@ -978,10 +994,9 @@ class Editor implements TimelineHost {
         } else {
           this.project.media.push(media);
         }
-        const track =
-          firstTrackFor(this.project, effective) ??
-          this.addTrack(effective.kind === 'audio' ? 'audio' : 'video');
-        this.addMediaToTrack(effective.id, track.id, this.timeUs);
+        // L'import pose le média au playhead sur une piste libre ; si la piste
+        // compatible est déjà occupée à cet instant, `addMediaToTrack` en ouvre une.
+        this.addMediaToTrack(effective.id, null, this.timeUs);
         this.toast(t('toast.imported', { name: effective.name }), 'ok');
       } catch (error) {
         const message = (error as Error).message;
@@ -1223,6 +1238,36 @@ class Editor implements TimelineHost {
     this.selectedClipId = copy.id;
     this.afterEdit();
     this.setStatus(t('status.clipDuplicated'));
+  }
+
+  /**
+   * Déplace le clip sélectionné d'une piste vers la précédente/suivante.
+   *
+   * Complète le glissement vertical à la souris : au clavier, on change de
+   * calque sans viser une ligne au pixel près. Seules les pistes du même type
+   * sont visées, comme pour le glissement.
+   */
+  private moveSelectedToTrack(direction: -1 | 1): void {
+    if (!this.selectedClipId) {
+      this.toast(t('toast.noClip'), 'info');
+      return;
+    }
+    const found = findClip(this.project, this.selectedClipId);
+    if (!found) return;
+    const compatible = this.project.tracks.filter((track) =>
+      found.clip.type === 'audio' ? track.kind === 'audio' : track.kind === 'video',
+    );
+    const index = compatible.findIndex((track) => track.id === found.track.id);
+    const target = compatible[index + direction];
+    if (!target) {
+      this.setStatus(t('status.noTrackInThatDirection'));
+      return;
+    }
+    found.track.clips = found.track.clips.filter((clip) => clip.id !== found.clip.id);
+    target.clips.push(found.clip);
+    target.clips.sort((a, b) => a.start_us - b.start_us);
+    this.afterEdit();
+    this.setStatus(t('status.clipMoved', { track: target.name }));
   }
 
   /** Coupe le clip sélectionné (ou celui sous le playhead) au playhead. */
@@ -2265,6 +2310,13 @@ class Editor implements TimelineHost {
       case 's':
         event.preventDefault();
         this.splitAtPlayhead();
+        break;
+      case 'arrowup':
+      case 'arrowdown':
+        // Alt + ↑/↓ : changer le clip de calque sans viser à la souris.
+        if (!event.altKey) break;
+        event.preventDefault();
+        this.moveSelectedToTrack(event.key === 'ArrowUp' ? -1 : 1);
         break;
       case 't':
         event.preventDefault();

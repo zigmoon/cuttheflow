@@ -458,6 +458,18 @@ export function firstTrackFor(project: Project, media: Media): Track | undefined
   return project.tracks.find((track) => trackAcceptsMedia(track, media));
 }
 
+/**
+ * La plage `[start, start + duration)` est-elle libre sur cette piste ?
+ *
+ * Sert à décider entre « poser sur la piste survolée » et « ouvrir une piste ».
+ * Un chevauchement de 1 µs compte comme occupé : c'est la règle du placement.
+ */
+export function slotFree(track: Track, startUs: number, durationUs: number): boolean {
+  const start = Math.max(0, startUs);
+  const end = start + Math.max(0, durationUs);
+  return !track.clips.some((clip) => start < clipEnd(clip) && end > clip.start_us);
+}
+
 /** Place un clip sans chevaucher les clips existants de la piste. */
 export function placeClip(track: Track, clip: Clip, preferredStart: number): void {
   let start = Math.max(0, preferredStart);

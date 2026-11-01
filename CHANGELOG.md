@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [CUT THE FLOW 2 — studio web 2.7.4 / moteur 0.10.2] - 2026-11-01
+
+### 🐛 Corrigé — un clip ne pouvait pas changer de piste à la souris
+
+Le glissement d'un clip ne traitait que l'axe horizontal : on pouvait le
+déplacer dans le temps, jamais le faire passer d'un calque à l'autre. Il fallait
+supprimer puis reposer le clip, en perdant ses effets, ses fondus et ses
+keyframes.
+
+Le geste vertical est maintenant pris en charge :
+
+- la piste survolée s'annonce (contour d'accent), et une piste qui n'accepte
+  pas le type du clip se signale en pointillés — un clip vidéo ne peut pas
+  atterrir sur une piste audio, où il ne serait plus rendu ;
+- l'élément DOM change de ligne sans interrompre le geste (la capture du
+  pointeur suit l'élément), donc on peut enchaîner plusieurs pistes d'un seul
+  mouvement ;
+- `Alt + ↑/↓` fait la même chose au clavier, sans viser une ligne au pixel.
+
+### 🐛 Corrigé — un média déposé depuis le chutier finissait « à la fin »
+
+Deux comportements se mélangeaient :
+
+- **import** et **clic** sur une carte posaient le clip après la dernière
+  séquence de la première piste compatible (`placeClip`), donc « à la fin » du
+  montage ;
+- **dépôt** sur une ligne créait toujours une piste neuve, y compris quand la
+  ligne visée était libre.
+
+Règle unique désormais : la piste visée si elle accepte le média **et** qu'elle
+est libre à cet instant ; sinon une piste s'ouvre, à la hauteur du dépôt. Le
+survol annonce la décision avant le relâchement (`.drop` ou `.drop-redirect`,
+classe qui n'avait aucun style et restait donc invisible). L'import pose au
+playhead et n'empile plus derrière.
+
+### 🐛 Corrigé — lecture saccadée dès deux calques
+
+Mesuré dans le studio, deux vidéos 1080p superposées : décodeurs créés au
+moment de la coupe (écran noir, puis rattrapage), recalages à répétition sur un
+seuil de 180 ms, deux compositions par image, et un canvas d'aperçu qui montait
+jusqu'à **3336 × 1877** (174 % de la résolution du projet) au moindre zoom.
+
+- **Pré-roulage** : les clips qui commencent dans les 0,9 s sont chargés et
+  positionnés sur leur première image avant la coupe.
+- **Synchronisation** : seuil ramené de 180 ms à 60 ms, amorçage exact au
+  premier passage sur un clip, et la tête de lecture se recale sur l'image
+  réellement décodée (correction douce, jamais de retour en arrière).
+- **Composition** : plus de double `draw()` (les rappels `seeked`/`loadeddata`
+  ne dessinent qu'en pause), plus d'écriture `volume`/`muted` inutile à chaque
+  image.
+- **Canvas** : le zoom d'aperçu plafonne à 100 % de la résolution du projet.
+- **Décodeurs** : plafonnés à 12 éléments vivants, les clips lointains sont
+  libérés (avant, ils s'accumulaient sans limite).
+
+Mesures après correction (Chromium, 2 vidéos 1080p, canvas 1920 × 1080) :
+60 i/s, p95 à 17 ms, aucune image noire au démarrage ni à la coupe.
+
+### 🔧 Service worker `ctf2-v17`
+
+Le shell a changé (feuille de style et modules réécrits) : le cache de la
+version précédente est purgé au premier chargement, et la page propose la
+mise à jour au lieu de servir un mélange des deux builds.
+
+---
 ## [CUT THE FLOW 2 — studio web 2.7.3 / moteur 0.10.2] - 2026-10-25
 
 ### 🐛 Corrigé — un média importé devenait illisible après un rechargement

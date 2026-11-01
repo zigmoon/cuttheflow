@@ -14,11 +14,14 @@ import {
   clamp,
   clipEnd,
   clipSpeed,
+  defaultDuration,
   formatTimecode,
   hasKeyframes,
   mediaById,
   quantize,
+  slotFree,
   timelineEnd,
+  trackAcceptsMedia,
 } from './state';
 
 export interface TimelineHost {
@@ -414,8 +417,7 @@ export class TimelineView {
       const target = event.target as HTMLElement;
       const clipElement = target.closest<HTMLElement>('.clip');
       const row = target.closest<HTMLElement>('.track-row');
-      if (!row) return;
-      if (!clipElement) {
+      if (!row) return;      if (!clipElement) {
         this.host.selectClip(null);
         this.host.setTime(this.timeFromEvent(event, row));
         return;
@@ -441,10 +443,13 @@ export class TimelineView {
         clip: found.clip,
         track: found.track,
         startX: event.clientX,
+        startY: event.clientY,
         originalStart: found.clip.start_us,
         originalDuration: found.clip.duration_us,
         originalSource: found.clip.source_start_us,
         moved: false,
+        touchedTracks: new Set([found.track.id]),
+        rows: this.rowBounds(),
         snapPoints: this.snapPoints(found.clip.id),
       };
       clipElement.setPointerCapture(event.pointerId);
@@ -456,6 +461,7 @@ export class TimelineView {
       const drag = this.drag;
       const deltaUs = ((event.clientX - drag.startX) / this.zoom) * US;
       if (Math.abs(event.clientX - drag.startX) > 2) drag.moved = true;
+      if (Math.abs(event.clientY - drag.startY) > 2) drag.moved = true;
       const media = mediaById(this.host.project, drag.clip.media);
       const maxDuration = this.maxDuration(drag.clip, media);
 
@@ -466,6 +472,12 @@ export class TimelineView {
           if (snapped !== null) start = snapped;
         }
         drag.clip.start_us = Math.max(0, quantize(start));
+        // ── Changement de piste ────────────────────────────────────────
+        // Un glissement vertical fait passer le clip d'une ligne à l'autre,
+        // comme dans un montage classique. Seules les pistes qui acceptent le
+        // type du clip sont visées : un clip vidéo ne tombe pas sur une piste
+        // audio (son contenu n'y serait plus rendu ni exporté).
+        this.followPointerTrack(event.clientY, drag);
       } else if (drag.mode === 'trim-left') {
         const mediaType = drag.clip.type === 'video' || drag.clip.type === 'audio';
         const speed = clipSpeed(drag.clip);
@@ -516,7 +528,11 @@ export class TimelineView {
       if (!this.drag) return;
       const drag = this.drag;
       this.drag = null;
-      drag.track.clips.sort((a, b) => a.start_us - b.start_us);
+      for (const trackId of drag.touchedTracks) {
+        const track = this.host.project.tracks.find((candidate) => candidate.id === trackId);
+        if (track) track.clips.sort((a, b) => a.start_us - b.start_us);
+      }
+      this.clearTrackHints();
       if (drag.moved) this.host.afterEdit();
     };
     window.addEventListener('pointerup', finish);
@@ -540,20 +556,37 @@ export class TimelineView {
     // ── Dépôt depuis le chutier ───────────────────────────────────────
     //
     // On écoute sur la zone défilante entière et non sur les seules pistes :
-    // lâcher sous la dernière piste doit aussi fonctionner (la piste est alors
-    // ajoutée en bas). Chaque dépôt crée sa propre piste, à la ligne survolée.
-    document.addEventListener('dragend', () => this.clearDropHints());
+    // lâcher sous la dernière piste doit aussi fonctionner.
+    //
+    // Règle de dépôt :
+    //   • la ligne survolée est libre à l'instant du relâchement → le clip s'y
+    //     pose, à cet instant précis ;
+    //   • elle est occupée (ou absente, ou d'un autre type) → une **piste
+    //     neuve** s'ouvre à cette hauteur. On ne refoule jamais le média « à la
+    //     fin » de la piste : c'est ce que l'utilisateur ne retrouvait pas.
+    // L'identifiant n'est lisible qu'au `dragstart` (les navigateurs
+    // protègent le contenu du `DataTransfer` pendant le survol) : on le
+    // mémorise ici pour pouvoir annoncer, dès le survol, si le dépôt ouvrira
+    // une piste neuve ou posera le clip sur la ligne visée.
+    document.addEventListener('dragstart', (event) => {
+      const mediaId = event.dataTransfer?.getData('application/x-ctf-media');
+      if (mediaId) this.draggedMediaId = mediaId;
+    });
+    document.addEventListener('dragend', () => {
+      this.draggedMediaId = null;
+      this.clearDropHints();
+      this.clearTrackHints();
+    });
 
     this.scroll.addEventListener('dragover', (event) => {
       if (!event.dataTransfer?.types.includes('application/x-ctf-media')) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'copy';
       const row = (event.target as HTMLElement).closest<HTMLElement>('.track-row');
-      this.clearDropHints(row);
+      const drop = this.resolveDrop(row, event, this.dragMediaId());
+      this.clearDropHints();
       if (!row) return;
-      // Un dépôt depuis le chutier construit toujours sa propre piste : on
-      // l'annonce avant le relâchement, quelle que soit la ligne survolée.
-      row.classList.add('drop-new');
+      row.classList.add(drop.newTrack ? 'drop-redirect' : 'drop');
     });
     this.scroll.addEventListener('dragleave', (event) => {
       if (event.target === this.scroll) this.clearDropHints();
@@ -564,14 +597,10 @@ export class TimelineView {
       event.preventDefault();
       const row = (event.target as HTMLElement).closest<HTMLElement>('.track-row');
       this.clearDropHints();
-      // L'instant est mesuré sur la ligne survolée (ou sur la règle quand on
-      // lâche dans le vide) : le clip tombe là où le curseur a été relâché.
-      this.host.addMediaToTrack(
-        mediaId,
-        row?.dataset.trackId ?? null,
-        this.timeFromEvent(event, row),
-        { newTrack: true },
-      );
+      const drop = this.resolveDrop(row, event, mediaId);
+      this.host.addMediaToTrack(mediaId, drop.trackId, drop.startUs, {
+        newTrack: drop.newTrack,
+      });
     });
 
     // ── Molette : zoom de la timeline, pas de l'interface ──────────────
@@ -613,6 +642,142 @@ export class TimelineView {
         element.classList.remove('drop', 'drop-redirect');
       });
   }
+
+  /** Identifiant du média en cours de glissement depuis le chutier. */
+  private draggedMediaId: string | null = null;
+
+  /**
+   * Renseigne le média glissé depuis le studio.
+   *
+   * Le contenu d'un `DataTransfer` n'est lisible qu'au `dragstart` : le studio
+   * le transmet donc ici pour que le survol puisse déjà annoncer la décision
+   * (pose sur la ligne ou ouverture d'une piste).
+   */
+  setDraggedMedia(mediaId: string | null): void {
+    this.draggedMediaId = mediaId;
+    if (!mediaId) this.clearDropHints();
+  }
+
+  private dragMediaId(): string | null {
+    return this.draggedMediaId;
+  }
+
+  /** Lignes de piste au moment où le geste commence (géométrie figée). */
+  private rowBounds(): RowBounds[] {
+    return Array.from(this.tracks.querySelectorAll<HTMLElement>('.track-row')).map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { id: element.dataset.trackId ?? '', top: rect.top, bottom: rect.bottom, element };
+    });
+  }
+
+  /**
+   * Ligne visée par une ordonnée écran.
+   *
+   * Hors des lignes, on retient la plus proche — mais seulement à moins d'une
+   * hauteur de ligne : au-delà, le pointeur a quitté la timeline et le clip ne
+   * doit pas sauter sur la première piste parce qu'on a survolé l'aperçu.
+   */
+  private rowAt(clientY: number, rows: RowBounds[]): RowBounds | null {
+    if (!rows.length) return null;
+    const inside = rows.find((row) => clientY >= row.top && clientY < row.bottom);
+    if (inside) return inside;
+    let best: RowBounds | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const row of rows) {
+      const distance = clientY < row.top ? row.top - clientY : clientY - row.bottom;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = row;
+      }
+    }
+    return bestDistance <= ROW_HEIGHT ? best : null;
+  }
+
+  private trackAcceptsClip(clip: Clip, track: Track): boolean {
+    if (clip.type === 'audio') return track.kind === 'audio';
+    // vidéo, image, texte et forme sont des couches visuelles.
+    return track.kind === 'video';
+  }
+
+  private markTrackHint(element: HTMLElement | null, ok: boolean): void {
+    if (!element) {
+      this.clearTrackHints();
+      return;
+    }
+    // Éviter une écriture DOM à chaque `pointermove` : la classe ne change
+    // qu'en passant d'une ligne à l'autre.
+    if (element.classList.contains(ok ? 'drag-target' : 'drag-blocked')) return;
+    this.clearTrackHints();
+    element.classList.add(ok ? 'drag-target' : 'drag-blocked');
+  }
+
+  private clearTrackHints(): void {
+    this.tracks
+      .querySelectorAll<HTMLElement>('.track-row.drag-target, .track-row.drag-blocked')
+      .forEach((element) => element.classList.remove('drag-target', 'drag-blocked'));
+  }
+
+  /**
+   * Fait suivre au clip la ligne survolée pendant un glissement vertical.
+   *
+   * Le clip est retiré de sa piste et poussé dans la nouvelle, et son élément
+   * DOM change de ligne : la capture du pointeur reste attachée à l'élément,
+   * donc le geste continue sans être interrompu.
+   */
+  private followPointerTrack(clientY: number, drag: DragState): void {
+    const row = this.rowAt(clientY, drag.rows);
+    if (!row) {
+      this.clearTrackHints();
+      return;
+    }
+    const target = this.host.project.tracks.find((candidate) => candidate.id === row.id);
+    if (!target) return;
+    if (target.id === drag.track.id) {
+      this.markTrackHint(row.element, true);
+      return;
+    }
+    if (!this.trackAcceptsClip(drag.clip, target)) {
+      this.markTrackHint(row.element, false);
+      return;
+    }
+    const index = drag.track.clips.indexOf(drag.clip);
+    if (index >= 0) drag.track.clips.splice(index, 1);
+    target.clips.push(drag.clip);
+    drag.track = target;
+    drag.touchedTracks.add(target.id);
+
+    const element = this.tracks.querySelector<HTMLElement>(
+      `.clip[data-clip-id="${cssEscape(drag.clip.id)}"]`,
+    );
+    if (element) {
+      row.element.appendChild(element);
+      element.dataset.trackId = target.id;
+    }
+    this.markTrackHint(row.element, true);
+  }
+
+  /**
+   * Décide ce que devient un média lâché depuis le chutier : piste survolée si
+   * elle accepte le média et qu'elle est libre à cet instant, sinon piste neuve.
+   */
+  private resolveDrop(
+    row: HTMLElement | null,
+    event: DragEvent,
+    mediaId: string | null,
+  ): { trackId: string | null; startUs: number; newTrack: boolean } {
+    const startUs = this.timeFromEvent(event, row);
+    if (!row) return { trackId: null, startUs, newTrack: true };
+    const track = this.host.project.tracks.find(
+      (candidate) => candidate.id === row.dataset.trackId,
+    );
+    if (!track) return { trackId: null, startUs, newTrack: true };
+    const media = mediaId ? mediaById(this.host.project, mediaId) : undefined;
+    if (!media) return { trackId: track.id, startUs, newTrack: true };
+    const fits =
+      trackAcceptsMedia(track, media) && slotFree(track, startUs, defaultDuration(media));
+    return { trackId: track.id, startUs, newTrack: !fits };
+  }
+
   private snapPoints(excludeClipId: string): number[] {
     const points = [0, this.host.timeUs];
     for (const track of this.host.project.tracks) {
@@ -669,11 +834,24 @@ interface DragState {
   clip: Clip;
   track: Track;
   startX: number;
+  /** Ordonnée du début du geste : c'est elle qui décide d'un changement de piste. */
+  startY: number;
   originalStart: number;
   originalDuration: number;
   originalSource: number;
   moved: boolean;
+  /** Pistes touchées par le geste : elles seules sont retriées à la fin. */
+  touchedTracks: Set<string>;
+  /** Géométrie des lignes, figée au début du geste. */
+  rows: RowBounds[];
   snapPoints: number[];
+}
+
+interface RowBounds {
+  id: string;
+  top: number;
+  bottom: number;
+  element: HTMLElement;
 }
 
 type DragMode = 'move' | 'trim-left' | 'trim-right';

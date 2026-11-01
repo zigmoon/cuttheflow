@@ -2024,6 +2024,19 @@ svg {
   outline-color: var(--warn, #e0b341);
 }
 
+/* Une piste survolée par un clip en cours de déplacement vertical. */
+.track-row.drag-target {
+  background: var(--accent-soft);
+  outline: 1px solid var(--accent-line);
+  outline-offset: -2px;
+}
+
+/* Piste qui n'accepte pas ce type de clip : le clip y resterait invisible. */
+.track-row.drag-blocked {
+  outline: 1px dashed var(--warn, #e0b341);
+  outline-offset: -2px;
+}
+
 .clip {
   position: absolute;
   top: 7px;
