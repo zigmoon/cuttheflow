@@ -15,11 +15,6 @@ if not exist "cuttheflow.exe" (
   exit /b 1
 )
 
-if not exist "libunwind.dll" (
-  echo   [info] libunwind.dll absent : liee en dur dans cette compilation,
-  echo          le studio demarre quand meme.
-)
-
 echo.
 echo   CUT THE FLOW - demarrage du studio...
 echo   Une fenetre d'application va s'ouvrir (sans onglets ni barre d'adresse).

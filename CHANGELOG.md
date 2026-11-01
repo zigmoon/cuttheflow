@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [CUT THE FLOW 2 — studio web 2.7.5 / moteur 0.10.2] - 2026-11-01
+## [CUT THE FLOW 2 — studio web 2.7.5 / moteur 0.10.3] - 2026-11-01
+
+### 🔒 Sécurité — une page web pouvait lire vos médias (DNS rebinding)
+
+Le serveur local n'acceptait que des **écritures** d'origine locale, mais
+n'inspectait jamais l'en-tête `Host` : une page distante dont le domaine se
+résout vers `127.0.0.1` devenait « même origine » que le moteur et pouvait
+télécharger chaque média importé (`GET /api/media/<id>`) ainsi que les exports
+terminés. Reproduit sur le binaire publié :
+
+```
+GET /api/media/<id>   Host: evil.example   →  200, 6 990 552 octets servis
+```
+
+Le `Host` est la seule valeur qu'une telle page ne peut pas falsifier. Le
+serveur le compare désormais au nom de la machine locale (`127.0.0.1`,
+`localhost`, `[::1]`, port ignoré) et répond `403` sinon. Vérifié après
+correctif : `Host: evil.example` → **403** ; `Host: 127.0.0.1` et
+`Host: localhost` → **200**.
+
+`--host` reste possible pour une écoute sur une autre interface : c'est un
+choix explicite, qui lève le contrôle (à placer derrière un proxy authentifié).
+Quatre tests unitaires couvrent la règle, dont les tentatives du type
+`127.0.0.1.evil.example` et `[2001:db8::1]:7317`.
+
+### 🐛 Corrigé — le lanceur Windows affichait un avertissement trompeur
+
+`DEMARRER.cmd` annonçait `libunwind.dll absent : liée en dur dans cette
+compilation` à **chaque** démarrage. Le fichier n'existe que pour la chaîne
+GNU/minGW locale ; les binaires publiés viennent de MSVC et n'en ont jamais
+besoin. L'utilisateur voyait donc un message d'erreur avant même l'ouverture du
+studio. Bloc supprimé, et `LISEZ-MOI.txt` ne liste plus cette DLL.
 
 ### 🐛 Corrigé — le champ « Vitesse » affichait `field.speed`
 
@@ -62,7 +93,10 @@ gestionnaire.
 - README : la règle de dépôt est décrite telle qu'elle est (plus « crée toujours
   une piste »), la liste des effets correspond aux 13 effets réellement livrés
   (`shine`, `glitch`, `VHS`, `duotone` n'existaient qu'en v1), les compteurs de
-  tests sont à jour (45 tests Rust, 34 contrôles d'interface).
+  tests sont à jour (49 tests Rust, 35 contrôles d'interface) et la commande du
+  banc d'export est celle qui fonctionne.
+- `rust/README.md` : il annonçait « 31 tests » et « l'interface n'expose pas
+  encore l'undo », faux depuis longtemps (l'undo est livré et testé).
 - CHANGELOG : les mentions `yourusername` (URL de support mortes), la licence
   « MIT » erronée et le lien vers un fichier supprimé sont corrigés ; la section
   « Planned Features » ne liste plus des fonctions déjà livrées.
@@ -74,6 +108,7 @@ gestionnaire.
 
 - `state.ts` : `firstTrackFor()` supprimé (plus aucun appelant après la nouvelle
   règle de placement).
+- `main.rs` : `display()` (mort, sous `#[allow(dead_code)]`) retiré.
 - `webm-muxer.js` : paramètre `fps` et constante `UNKNOWN_SIZE` inutilisés
   retirés. `astro check` passe à **0 erreur, 0 avertissement, 0 indice**.
 

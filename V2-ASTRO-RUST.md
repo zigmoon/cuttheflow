@@ -238,6 +238,10 @@ modifiés. Les binaires sont reconstruits parce que `astro/dist` y est embarqué
 | Cohérence | `package-lock.json` réaligné sur `package.json` |
 | Service worker | `VERSION` = `ctf2-v7` |
 
+> Depuis le passage des publications à la chaîne **MSVC**, `libunwind.dll` n'est
+> plus produite ni livrée : les binaires sont liés statiquement. Seul
+> `build.ps1`, qui compile en local avec `gnullvm`, la copie encore.
+
 ### Ce que « le moins de problèmes » veut dire ici
 
 | Système | Piège évité |

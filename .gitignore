@@ -31,6 +31,9 @@ tools/regression/out/
 _fx/chrome-profile-*/
 _fx/out/
 _fx/*.mp4
+# Fixtures du banc (générées par ffmpeg, jamais versionnées).
+_fx/*.mp3
+_fx/*.wav
 
 # Divers
 *.log

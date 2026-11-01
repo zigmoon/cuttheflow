@@ -141,8 +141,10 @@ l'exécutable, puis dans le `PATH`. La police des clips texte suit le même ordr
 
 ## API locale
 
-Toutes les routes sont sur `127.0.0.1` et le serveur refuse les origines
-distantes (sauf `localhost`/`127.0.0.1`, pour le développement Astro).
+Toutes les routes sont sur `127.0.0.1`. Le serveur refuse les écritures
+d'origine distante (seules `localhost`/`127.0.0.1` sont acceptées, pour le
+développement Astro) et **tout `Host` qui ne désigne pas la machine locale** —
+c'est ce qui empêche une page web de lire vos médias par DNS rebinding.
 
 | Méthode | Route | Rôle |
 |---|---|---|
@@ -265,15 +267,20 @@ fait automatiquement.
 ## Tests
 
 ```bash
-cargo test --workspace                 # 31 tests unitaires (temps, modèle, plan, graphes, WAV)
+cargo test --workspace                 # 49 tests unitaires (temps, modèle, plan, graphes, WAV, hôte)
 node scripts/verify-export.mjs         # 45 vérifications ffmpeg (médias requis)
 ```
 
-## Limites connues (v2.1)
+Le banc trouve ses valeurs par défaut (`target/release/cuttheflow` et
+`../v1/tools/regression/media`) ; `--bin` et `--media` les remplacent.
 
-- L'interface n'expose pas encore les sous-titres, les proxys 4K ni l'undo.
-- Le serveur n'a pas d'authentification : il est prévu pour écouter sur
-  `127.0.0.1`. Ne le lancez pas sur `0.0.0.0` sans proxy authentifié.
+## Limites connues
+
+- L'interface n'expose pas encore les sous-titres ni les proxys 4K.
+- Le serveur n'a pas d'authentification : il écoute sur `127.0.0.1`, refuse tout
+  `Host` qui n'est pas `127.0.0.1`/`localhost`/`[::1]`, et rejette les écritures
+  d'origine distante. Ne le lancez pas sur `0.0.0.0` sans proxy authentifié :
+  `--host` lève volontairement le contrôle du `Host`.
 - ffmpeg n'est pas embarqué dans le binaire (licence et taille) : `doctor`
   vérifie sa présence et explique comment l'installer.
 - macOS : binaires ad-hoc signés par CI ; notarisation seulement si les secrets

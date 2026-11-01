@@ -56,6 +56,37 @@ fn is_local_origin(origin: &str) -> bool {
         || origin.starts_with("http://[::1]:")
 }
 
+/// Le nom d'hôte de l'en-tête `Host` désigne-t-il la machine locale ?
+///
+/// On compare le **nom seul** (le port est ignoré) : le moteur ne répond qu'à
+/// une seule application, et un port différent ne doit pas suffire à se faire
+/// passer pour lui. `Host` absent renvoie `true` : les clients HTTP/1.0 et les
+/// outils locaux n'envoient pas cet en-tête, et rien dans ce cas ne peut venir
+/// d'une page web (un navigateur l'envoie toujours).
+fn host_is_loopback(host: Option<&str>) -> bool {
+    let Some(host) = host else {
+        return true;
+    };
+    let host = host.trim();
+    if host.is_empty() {
+        return true;
+    }
+    // Forme IPv6 littérale : `[::1]` ou `[::1]:7317`.
+    if let Some(rest) = host.strip_prefix('[') {
+        return match rest.split_once(']') {
+            Some((address, _)) => address == "::1",
+            None => false,
+        };
+    }
+    let name = match host.rsplit_once(':') {
+        Some((name, port)) if port.chars().all(|c| c.is_ascii_digit()) => name,
+        _ => host,
+    };
+    name.eq_ignore_ascii_case("127.0.0.1")
+        || name.eq_ignore_ascii_case("localhost")
+        || name == "::1"
+}
+
 const MAX_JSON_BODY: u64 = 16 * 1024 * 1024;
 const MAX_UPLOAD_BODY: u64 = 64 * 1024 * 1024 * 1024;
 const EXPORT_HISTORY: usize = 20;
@@ -105,6 +136,15 @@ struct State {
     counter: AtomicU64,
     origins: Vec<String>,
     port: u16,
+    /// Le serveur n'écoute-t-il que sur la boucle locale (cas par défaut) ?
+    ///
+    /// Si oui, aucune requête dont l'en-tête `Host` désigne un autre nom n'est
+    /// acceptée : c'est la seule défense contre le *DNS rebinding*, où une page
+    /// distante se fait résoudre vers 127.0.0.1 pour devenir « même origine »
+    /// et lire les médias de l'utilisateur. Une écoute explicite sur une autre
+    /// interface (`--host 0.0.0.0`) désactive ce contrôle : l'utilisateur a
+    /// demandé à être joignable autrement que par la boucle locale.
+    loopback_only: bool,
 }
 
 struct JobHandle {
@@ -166,6 +206,9 @@ fn prepare(
         format!("http://[::1]:{port}"),
     ];
     let url = format!("http://127.0.0.1:{port}/");
+    // Une écoute sur une autre interface est un choix explicite : dans ce cas
+    // on ne peut plus exiger un `Host` de boucle locale, le contrôle est levé.
+    let loopback_only = host_is_loopback(Some(options.host.as_str()));
 
     let state = Arc::new(State {
         root,
@@ -181,6 +224,7 @@ fn prepare(
         counter: AtomicU64::new(1),
         origins,
         port,
+        loopback_only,
     });
 
     println!("CUT THE FLOW — moteur prêt");
@@ -336,6 +380,20 @@ fn handle_connection(state: Arc<State>, stream: TcpStream) -> Result<(), String>
         .get("content-length")
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(0);
+
+    // ── Contrôle du `Host` (anti-DNS-rebinding) ────────────────────────
+    //
+    // Sans lui, une page distante dont le domaine se résout vers 127.0.0.1
+    // devenait « même origine » que le moteur et pouvait lire tous les médias
+    // importés (`GET /api/media/<id>`) ainsi que les exports terminés.
+    // Le `Host` est la seule chose qu'une telle page ne peut pas falsifier.
+    if state.loopback_only && !host_is_loopback(headers.get("host").map(String::as_str)) {
+        return respond_json(
+            &mut reader,
+            403,
+            &json!({"error": "nom d'hôte refusé : le studio n'accepte que 127.0.0.1 ou localhost"}),
+        );
+    }
 
     let origin = headers.get("origin").cloned();
     set_cors(&origin);
@@ -1415,5 +1473,58 @@ fn open_default_browser(url: &str) {
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         let _ = std::process::Command::new("xdg-open").arg(url).status();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Le contrôle du `Host` est la seule défense contre le DNS rebinding :
+    /// une page distante se fait résoudre vers 127.0.0.1 pour devenir « même
+    /// origine ». Sans lui, elle lisait tous les médias importés.
+    #[test]
+    fn host_de_boucle_locale_accepte() {
+        for host in [
+            "127.0.0.1:7317",
+            "localhost:7317",
+            "[::1]:7317",
+            "127.0.0.1",
+            "localhost",
+            "LOCALHOST:1",
+            " 127.0.0.1:7317 ",
+        ] {
+            assert!(host_is_loopback(Some(host)), "refusé à tort : {host}");
+        }
+    }
+
+    #[test]
+    fn host_etranger_refuse() {
+        for host in [
+            "evil.example:7317",
+            "evil.example",
+            "app.zigmoon.com",
+            "127.0.0.1.evil.example",
+            "localhost.evil.example:7317",
+            "[2001:db8::1]:7317",
+            "192.168.1.10:7317",
+        ] {
+            assert!(!host_is_loopback(Some(host)), "accepté à tort : {host}");
+        }
+    }
+
+    /// Pas d'en-tête `Host` : clients HTTP/1.0 et outils locaux. Un navigateur
+    /// en envoie toujours, donc l'absence ne peut pas venir d'une page web.
+    #[test]
+    fn host_absent_tolere() {
+        assert!(host_is_loopback(None));
+        assert!(host_is_loopback(Some("")));
+    }
+
+    #[test]
+    fn origine_distante_refusee() {
+        assert!(is_local_origin("http://127.0.0.1:4321"));
+        assert!(is_local_origin("http://localhost:7317"));
+        assert!(!is_local_origin("https://evil.example"));
     }
 }

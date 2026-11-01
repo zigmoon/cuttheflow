@@ -51,7 +51,6 @@ ouvrez le Terminal dans ce dossier et tapez :  bash demarrer.command
 FICHIERS
 --------
   cuttheflow           le moteur et l'interface (Windows : cuttheflow.exe)
-  libunwind.dll        Windows — dépendance, si ce fichier est présent
   WebView2Loader.dll   Windows — ouvre la fenêtre native, si présent
   DEMARRER.cmd         lanceur Windows
   demarrer.sh          lanceur Linux
@@ -62,10 +61,9 @@ FICHIERS
   LISEZ-MOI.txt        ce fichier
   LICENSE              licence du logiciel
 
-Windows : ne séparez jamais cuttheflow.exe des .dll qui l'accompagnent. Si vous
-déplacez l'exécutable, déplacez tout le dossier. (Selon la chaîne de
-compilation, l'une de ces DLL peut être liée en dur et donc absente : c'est
-normal, le studio démarre quand même.)
+Windows : l'exécutable et la DLL, s'il y en a une, doivent rester dans le même
+dossier. Selon la chaîne de compilation le chargeur WebView2 est lié en dur :
+son absence est normale, le studio démarre quand même.
 
 Linux : « bash demarrer.sh » suffit pour travailler. « bash installer.sh » va
 plus loin : installe l'exécutable dans ~/.local/bin, les icônes dans le thème du

@@ -10,7 +10,7 @@ mod assets;
 mod desktop;
 mod server;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use ctf_core::model::{ExportFormat, Project};
@@ -74,6 +74,11 @@ Sans commande, `serve` démarre et le studio s'ouvre dans sa propre fenêtre
 (WebView2 sous Windows, WKWebView sous macOS, WebKitGTK sous Linux).
   --web     ouvre le studio dans le navigateur par défaut au lieu de la fenêtre
   --native  force la fenêtre native (défaut quand elle est compilée)
+
+Le serveur n'écoute que sur la boucle locale et refuse toute requête dont
+l'en-tête Host ne désigne pas 127.0.0.1 / localhost / [::1] : une page web ne
+peut donc pas atteindre vos médias par rebinding DNS. Changer `--host` pour
+écouter ailleurs lève cette protection : mettez un proxy authentifié devant.
 
 Si la fenêtre native est indisponible (WebKitGTK absent, pas de session
 graphique), le studio le signale et bascule sur le navigateur.
@@ -288,9 +293,4 @@ fn serve(args: &[String]) -> Result<(), String> {
         return server::run_native(ffmpeg, ffmpeg_error, options);
     }
     server::run(ffmpeg, ffmpeg_error, options)
-}
-
-#[allow(dead_code)]
-fn display(path: &Path) -> String {
-    path.display().to_string()
 }
